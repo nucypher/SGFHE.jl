@@ -283,7 +283,7 @@ function decrypt_lwe(key::PrivateKey, lwe::LWE)
 end
 
 
-function flatten_deterministic(a, B, l)
+function flatten_deterministic(a, B, l, q)
 
     decomp = Array{typeof(a)}(undef, l)
     for i in l-1:-1:0
@@ -299,7 +299,7 @@ function flatten_deterministic(a, B, l)
             if i < l
                 decomp[i+1] += 1
             end
-            decomp[i] -= B
+            decomp[i] = decomp[i] - B
         end
     end
 
@@ -307,22 +307,26 @@ function flatten_deterministic(a, B, l)
 end
 
 
-function flatten(a, B, l)
+function flatten(a, B, l, q)
     if mod(B, 2) == 0
         xmax = 3 * div(B, 2)
     else
         xmax = 3 * div(B-1, 2)
     end
 
-    x = rand(-xmax:xmax, l)
-    rand_a = mod(a - sum(x .* B.^(0:l-1)), B^l)
-    y = flatten_deterministic(rand_a, B, l)
+    #x = rand(-xmax:xmax, l)
+    x = mod.(rand(-xmax:xmax, l), q)
+    rand_a = mod(a - sum(x .* B.^(0:l-1)), q)
+    y = flatten_deterministic(rand_a, B, l, q)
     x + y
 end
 
 
-function flatten_poly(a::Polynomial, B, l, q)
-    decomp = flatten.(a.coeffs, B, l)
+function flatten_poly(a::Polynomial, B, l)
+    q = a.modulus
+    @assert q == B^l # flatten() requires this
+
+    decomp = flatten.(a.coeffs, B, l, q)
     joined = cat(decomp..., dims=2)
     [polynomial(joined[i,:], q) for i in 1:l]
 end
@@ -332,11 +336,8 @@ end
 "triangle G" operator in the paper
 """
 function decompose(rlwe::RLWE, B, l)
-
-    q = rlwe.a.modulus
-    @assert q == B^l # flatten() requires this
-    a_decomp = flatten_poly(rlwe.a, B, l, q)
-    b_decomp = flatten_poly(rlwe.b, B, l, q)
+    a_decomp = flatten_poly(rlwe.a, B, l)
+    b_decomp = flatten_poly(rlwe.b, B, l)
     [a_decomp; b_decomp]
 end
 

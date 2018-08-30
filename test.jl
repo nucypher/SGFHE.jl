@@ -42,9 +42,10 @@ function test_flatten_deterministic()
         for B in 3:4
             q = B^l
             for a in 0:q-1
-                decomp = flatten_deterministic(a, B, l)
+                decomp = flatten_deterministic(a, B, l, q)
                 restore = mod(sum(decomp .* B.^(0:l-1)), q)
-                @assert all(decomp .> -B/2) && all(decomp .<= B/2)
+                #@assert all(decomp .> -B/2) && all(decomp .<= B/2)
+                @assert all(d >= q-B/2 || d <= B/2 for d in decomp)
                 @assert restore == a
             end
         end
@@ -57,9 +58,10 @@ function test_flatten()
         for B in 3:4
             q = B^l
             for a in 0:q-1
-                decomp = flatten(a, B, l)
+                decomp = flatten(a, B, l, q)
                 restore = mod(sum(decomp .* B.^(0:l-1)), q)
-                @assert all(decomp .>= -2*B) && all(decomp .<= 2*B)
+                @assert all(d .>= q-2*B || d <= 2*B for d in decomp)
+                #@assert all(decomp .>= -2*B) && all(decomp .<= 2*B)
                 @assert restore == a
             end
         end
@@ -72,10 +74,11 @@ function test_flatten()
 
     for i in 1:10000
         a = rand(Int128(0):Int128(q-1))
-        decomp = flatten(a, B, l)
+        decomp = flatten(a, B, l, q)
         restore = mod(sum(decomp .* B.^(0:l-1)), q)
         # TODO: change the range when switched to nonnegative numbers
-        @assert all(decomp .>= -2*B) && all(decomp .<= 2*B)
+        @assert all(d .>= q-2*B || d <= 2*B for d in decomp)
+        #@assert all(decomp .>= -2*B) && all(decomp .<= 2*B)
         @assert restore == a
     end
 end

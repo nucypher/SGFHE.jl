@@ -109,5 +109,5 @@ function test_mul()
 
 end
 
-#test_shift()
+test_shift()
 test_mul()

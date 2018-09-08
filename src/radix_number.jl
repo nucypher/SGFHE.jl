@@ -124,8 +124,61 @@ end
 end
 
 
+@inline function _most_significant_digit(x::RadixNumber{N, T}) where N where T
+    for i in N:-1:1
+        if x.value[i] > 0
+            return i
+        end
+    end
+    return 0
+end
+
+
+# Multiplication that ignores overflow (that is, returns a number of the same length as the inputs).
+@inline function *(x::RadixNumber{N, T}, y::RadixNumber{N, T}) where N where T
+    n = _most_significant_digit(x)
+    t = _most_significant_digit(y)
+    w = zero(RadixNumber{N, T})
+    for i in 1:t
+        c = zero(T)
+        hi = zero(T)
+        for j in 1:N+1-i # i + j - 1 <= N -> j <= N + 1 - i
+            lo, hi = mulhilo(x.value[j], y.value[i])
+            lo, hi = addhilo(lo, hi, c)
+            lo, hi = addhilo(lo, hi, w.value[i + j - 1])
+            w = setindex(w, lo, i + j - 1)
+            c = hi
+        end
+        #w = setindex(w, hi, i + n)
+    end
+    w
+end
+
+
 
 #=
+
+@inline function mprec_mul_hilo(x::RadixNumber{N, T}, y::RadixNumber{N, T}) where N where T
+    s = length(x)
+    n = most_significant_digit(x)
+    t = most_significant_digit(y)
+    w = zeros(T, 2s)
+    for i in 1:t
+        c = zero(T)
+        hi = zero(T)
+        for j in 1:n
+            lo, hi = mulhilo(x[j], y[i])
+            lo, hi = addhilo(lo, hi, c)
+            lo, hi = addhilo(lo, hi, w[i + j - 1])
+            w[i + j - 1] = lo
+            c = hi
+        end
+        w[i + n] = hi
+    end
+    w
+end
+
+
 function _ge_array(x::Array{T, 1}, y::Array{T, 1}, y_shift) where T <: Unsigned
     # true if x >= y * b^y_shift
     n = length(y)

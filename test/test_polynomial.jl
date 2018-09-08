@@ -2,33 +2,42 @@ push!(LOAD_PATH, "../src")
 
 using BenchmarkTools
 
-using SGFHE: Polynomial, shift, reference_mul, fast_reference_mul, karatsuba_mul
+using SGFHE:
+    RadixNumber, RRElemMontgomery, Polynomial, shift,
+    reference_mul, fast_reference_mul, karatsuba_mul
 
 
 function test_shift()
     coeffs = 0:9
     modulus = 21
-    tp = UInt8
+    rtp = RadixNumber{2, UInt8}
+    mr = convert(rtp, modulus)
+    mtp = RRElemMontgomery{rtp, mr}
 
-    p = Polynomial{2, tp}(coeffs, modulus, 1)
+    p = Polynomial(mtp, coeffs, 1)
 
-    @assert shift(p, 4) == Polynomial{2, tp}([-(6:9); 0:5], modulus, 1)
-    @assert shift(p, 10) == Polynomial{2, tp}([-(0:9);], modulus, 1)
-    @assert shift(p, 14) == Polynomial{2, tp}([6:9; -(0:5)], modulus, 1)
-    @assert shift(p, 20) == Polynomial{2, tp}([0:9;], modulus, 1)
-    @assert shift(p, 24) == Polynomial{2, tp}([-(6:9); 0:5], modulus, 1)
+    @assert shift(p, 4) == Polynomial(mtp, [-(6:9); 0:5], 1)
+    @assert shift(p, 10) == Polynomial(mtp, [-(0:9);], 1)
+    @assert shift(p, 14) == Polynomial(mtp, [6:9; -(0:5)], 1)
+    @assert shift(p, 20) == Polynomial(mtp, [0:9;], 1)
+    @assert shift(p, 24) == Polynomial(mtp, [-(6:9); 0:5], 1)
 
-    @assert shift(p, -4) == Polynomial{2, tp}([4:9; -(0:3)], modulus, 1)
-    @assert shift(p, -10) == Polynomial{2, tp}([-(0:9);], modulus, 1)
-    @assert shift(p, -14) == Polynomial{2, tp}([-(4:9); 0:3], modulus, 1)
-    @assert shift(p, -20) == Polynomial{2, tp}([0:9;], modulus, 1)
-    @assert shift(p, -24) == Polynomial{2, tp}([4:9; -(0:3)], modulus, 1)
+    @assert shift(p, -4) == Polynomial(mtp, [4:9; -(0:3)], 1)
+    @assert shift(p, -10) == Polynomial(mtp, [-(0:9);], 1)
+    @assert shift(p, -14) == Polynomial(mtp, [-(4:9); 0:3], 1)
+    @assert shift(p, -20) == Polynomial(mtp, [0:9;], 1)
+    @assert shift(p, -24) == Polynomial(mtp, [4:9; -(0:3)], 1)
 
 
     cyclic = 1
     modulus = BigInt(1) << 80 + 1
     p1_ref = BigInt.(rand(UInt128, 64)) .% modulus
-    p1 = Polynomial{2, UInt64}(p1_ref, modulus, cyclic)
+
+    rtp = RadixNumber{2, UInt64}
+    mr = convert(rtp, modulus)
+    mtp = RRElemMontgomery{rtp, mr}
+
+    p1 = Polynomial(mtp, p1_ref, cyclic)
     display(@benchmark shift($p1, 123))
     println()
 
@@ -75,8 +84,12 @@ function test_mul()
     p1_ref = BigInt.(rand(UInt128, 64)) .% modulus
     p2_ref = BigInt.(rand(UInt128, 64)) .% modulus
 
-    p1 = Polynomial{2, UInt64}(p1_ref, modulus, cyclic)
-    p2 = Polynomial{2, UInt64}(p2_ref, modulus, cyclic)
+    rtp = RadixNumber{2, UInt64}
+    mr = convert(rtp, modulus)
+    mtp = RRElemMontgomery{rtp, mr}
+
+    p1 = Polynomial(mtp, p1_ref, cyclic)
+    p2 = Polynomial(mtp, p2_ref, cyclic)
 
     @assert p1_ref == convert.(BigInt, p1.coeffs)
     @assert ((p1_ref .* p2_ref) .% modulus) == convert.(BigInt, p1.coeffs .* p2.coeffs)
@@ -101,7 +114,7 @@ function test_mul()
     #display(@benchmark reference_mul($p1, $p2))
     println()
 
-    #display(@benchmark fast_reference_mul($p1, $p2))
+    display(@benchmark fast_reference_mul($p1, $p2))
     println()
 
     display(@benchmark karatsuba_mul($p1, $p2))
@@ -109,5 +122,5 @@ function test_mul()
 
 end
 
-test_shift()
+#test_shift()
 test_mul()

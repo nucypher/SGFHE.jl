@@ -1,151 +1,147 @@
-import Base: +, -, *, ==, convert
+struct RRElem{T, M}
+    value :: T
 
-
-struct ResidueRing{N, T}
-    modulus :: RadixNumber{N, T}
-    montgomery_coeff :: T
-    #radix_modulus :: BigInt
-
-    function ResidueRing(modulus::RadixNumber{N, T}) where N where T
-        coeff = get_montgomery_coeff_ntuple(modulus)
-        rmod = BigInt(1) << (sizeof(T) * N * 8)
-        new{N, T}(modulus, coeff)
-    end
-end
-
-
-struct RRElem{N, T}
-    rr :: ResidueRing{N, T}
-    value :: RadixNumber{N, T}
-
-    function RRElem(rr::ResidueRing{N, T}, x::RadixNumber{N, T}) where N where T
-        new{N, T}(rr, x)
+    @inline function RRElem(x::T, m::T) where T
+        #println("T=$T, M=$m")
+        new{T, m}(x)
     end
 
     # If we're converting a negative number to a RRElem,
     # a conversion Integer -> RadixNumber -> RRElem will give a wrong result.
     # So it has to be performed directly.
-    function RRElem(rr::ResidueRing{N, T}, x::Integer) where N where T
+    @inline function RRElem{T, M}(x::Integer) where T where M
         # TODO: write an optimized version of this
-        m_i = convert(BigInt, rr.modulus)
-        mod_x = RadixNumber{N, T}(mod(x, m_i))
-        new{N, T}(rr, mod_x)
+        # @assert typeof(M) == T
+        m_i = convert(BigInt, M)
+        mod_x = T(mod(x, m_i))
+        new{T, M}(mod_x)
     end
 end
 
 
-function to_rrelem(rr::ResidueRing{N, T}, x::RadixNumber{N, T}) where N where T
+struct RRElemMontgomery{M, T}
+    value :: RRElem{M, T}
+end
+
+
+@generated function montgomery_coeff(::Type{RRElem{T, M}}) where T where M
+    Core.println("generating for $T $(M.value)")
+    res = get_montgomery_coeff_ntuple(M)
+    :( $res )
+end
+
+
+# TODO: organize conversions properly. Perhaps some are not needed.
+
+function convert(::Type{RRElem{T, M}}, x::T) where T where M
     # TODO: write a mod() function for NTuples
-    m_i = convert(BigInt, rr.modulus.value)
-    x_i = convert(BigInt, x.value)
-    mod_x = RadixNumber{N, T}(mod(x_i, m_i))
-    RRElem(rr, mod_x)
+    m_i = convert(BigInt, M)
+    x_i = convert(BigInt, x)
+    mod_x = convert(T, mod(x_i, m_i))
+    RRElem(mod_x, M)
 end
 
 
-struct RRElemMontgomery{N, T}
-    value :: RRElem{N, T}
+function convert(::Type{RRElem{T, M}}, x::V) where T where M where V <: Integer
+    # TODO: write a mod() function for NTuples
+    # TODO: picking up this conversion case to properly process negative numbers.
+    # if it is converted to RadixNumber first, and reduced by modulo next,
+    # the result will be wrong.
+    m_i = convert(BigInt, M)
+    x_i = convert(BigInt, x)
+    mod_x = convert(T, mod(x_i, m_i))
+    RRElem(mod_x, M)
 end
 
 
-function Base.convert(::Type{V}, x::RRElem{N, T}) where V <: Integer where N where T
+function convert(::Type{V}, x::RRElem{T, M}) where V <: Integer where T where M
     convert(V, x.value)
 end
 
 
-function Base.convert(::Type{RRElem{N, T}}, x::RRElemMontgomery{N, T}) where N where T
-    rr = x.value.rr
-    res = from_montgomery(x.value.value, rr.modulus, rr.montgomery_coeff)
-    RRElem(rr, res)
+function convert(::Type{RRElem{T, M}}, x::RRElemMontgomery{T, M}) where T where M
+    res = from_montgomery(x.value.value, M, montgomery_coeff(RRElem{T, M}))
+    RRElem(res, M)
 end
 
 
-function Base.convert(::Type{V}, x::RRElemMontgomery{N, T}) where V <: Integer where N where T
-    convert(V, convert(RRElem{N, T}, x))
+function convert(::Type{V}, x::RRElemMontgomery{T, M}) where V <: Integer where T where M
+    convert(V, convert(RRElem{T, M}, x))
 end
+
+
+convert(::Type{RRElemMontgomery{T, M}}, x::RRElem{T, M}) where T where M =
+    RRElemMontgomery{T, M}(RRElem(to_montgomery(x.value, M), M))
+
+
+convert(::Type{RRElemMontgomery{T, M}}, x::V) where V <: Integer where T where M =
+    convert(RRElemMontgomery{T, M}, convert(RRElem{T, M}, x))
 
 
 # Required for broadcasting
-Base.length(rr::ResidueRing{N, T}) where N where T = 1
-Base.iterate(rr::ResidueRing{N, T}) where N where T = (rr, nothing)
-Base.iterate(rr::ResidueRing{N, T}, state) where N where T = nothing
-
-Base.length(x::RRElemMontgomery{N, T}) where N where T = 1
-Base.iterate(x::RRElemMontgomery{N, T}) where N where T = (x, nothing)
-Base.iterate(x::RRElemMontgomery{N, T}, state) where N where T = nothing
+Base.length(x::RRElemMontgomery{T, M}) where T where M = 1
+Base.iterate(x::RRElemMontgomery{T, M}) where T where M = (x, nothing)
+Base.iterate(x::RRElemMontgomery{T, M}, state) where T where M = nothing
 
 
-==(x::ResidueRing{N, T}, y::ResidueRing{N, T}) where N where T = x.modulus == y.modulus
-==(x::RRElem{N, T}, y::RRElem{N, T}) where N where T = x.rr == y.rr && x.value == y.value
-==(x::RRElemMontgomery{N, T}, y::RRElemMontgomery{N, T}) where N where T = x.value == y.value
+==(x::RRElem{T, M}, y::RRElem{T, M}) where T where M = x.value == y.value
+==(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T where M = x.value == y.value
 
 
-Base.convert(::Type{RRElemMontgomery{N, T}}, x::RRElem{N, T}) where N where T =
-    RRElemMontgomery{N, T}(RRElem(x.rr, to_montgomery(x.value, x.rr.modulus)))
-
-
-Base.show(io::IO, x::RRElem{N, T}) where N where T = print(io, "$(x.value)RR")
-Base.show(io::IO, x::RRElemMontgomery{N, T}) where N where T = print(io, "$(x.value)M")
-
-
-rr_zero(::Type{RRElem{N, T}}, rr::ResidueRing{N, T}) where N where T =
-    RRElem(rr, zero(RadixNumber{N, T}))
-rr_zero(::Type{RRElemMontgomery{N, T}}, rr::ResidueRing{N, T}) where N where T =
-    RRElemMontgomery(rr_zero(RRElem{N, T}, rr))
-
-
-@inline function +(x::RRElem{N, T}, y::RRElem{N, T}) where N where T
-    # TODO: @assert x.rr == y.rr
-    RRElem(x.rr, addmod(x.value, y.value, x.rr.modulus))
+function show(io::IO, x::RRElem{T, M}) where T where M
+    show(io, x.value)
+    print(io, "RR")
 end
 
 
-@inline function +(x::RRElemMontgomery{N, T}, y::RRElemMontgomery{N, T}) where N where T
+function show(io::IO, x::RRElemMontgomery{T, M}) where T where M
+    show(io, x.value)
+    print(io, "M")
+end
+
+
+zero(::Type{RRElem{T, M}}) where T where M = RRElem(zero(T), M)
+zero(::Type{RRElemMontgomery{T, M}}) where T where M = RRElemMontgomery(zero(RRElem{T, M}))
+
+
+@inline function +(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
+    # TODO: @assert x.rr == y.rr
+    RRElem(addmod(x.value, y.value, M), M)
+end
+
+
+@inline function +(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T where M
     # TODO: @assert x.rr == y.rr
     RRElemMontgomery(x.value + y.value)
 end
 
 
-@inline function -(x::RRElem{N, T}, y::RRElem{N, T}) where N where T
+@inline function -(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
     # TODO: @assert x.rr == y.rr
-    RRElem(x.rr, submod(x.value, y.value, x.rr.modulus))
+    RRElem(submod(x.value, y.value, M), M)
 end
 
 
-@inline function -(x::RRElemMontgomery{N, T}, y::RRElemMontgomery{N, T}) where N where T
-    # TODO: @assert x.rr == y.rr
+@inline function -(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T where M
     RRElemMontgomery(x.value - y.value)
 end
 
 
-@inline function -(x::RRElem{N, T}) where N where T
-    # TODO: @assert x.rr == y.rr
+@inline function -(x::RRElem{T, M}) where T where M
     # TODO: can be optimized
-    rr_zero(RRElem{N, T}, x.rr) - x
+    zero(RRElem{T, M}) - x
 end
 
 
-@inline function -(x::RRElemMontgomery{N, T}) where N where T
-    # TODO: @assert x.rr == y.rr
+@inline function -(x::RRElemMontgomery{T, M}) where T where M
     # TODO: can be optimized
-    rr_zero(RRElemMontgomery{N, T}, x.value.rr) - x
+    zero(RRElemMontgomery{T, M}) - x
 end
 
 
-# TODO: for testing purposes only, remove afterwards
-@inline function *(x::RRElem{N, T}, y::RRElem{N, T}) where N where T
-    xt = x.value
-    yt = y.value
-    rr = x.rr
-    res = mulmod_montgomery_ntuple(xt, yt, rr.modulus, rr.montgomery_coeff)
-    RRElem(rr, res)
-end
-
-
-@inline function *(x::RRElemMontgomery{N, T}, y::RRElemMontgomery{N, T}) where N where T
+@inline function *(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T where M
     xt = x.value.value
     yt = y.value.value
-    rr = x.value.rr
-    res = mulmod_montgomery_ntuple(xt, yt, rr.modulus, rr.montgomery_coeff)
-    RRElemMontgomery(RRElem(rr, res))
+    res = mulmod_montgomery_ntuple(xt, yt, M, montgomery_coeff(RRElem{T, M}))
+    RRElemMontgomery(RRElem(res, M))
 end

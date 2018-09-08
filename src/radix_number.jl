@@ -1,4 +1,4 @@
-import Base: +, -, *, ==, >, >=, convert, show, zero, setindex
+import Base: +, -, *, ==, >, >=, convert, show, zero, setindex, length, div
 
 
 struct RadixNumber{N, T <: Unsigned}
@@ -16,6 +16,10 @@ end
     end
     res
 end
+
+
+# To resolve ambiguity
+convert(::Type{RadixNumber{N, T}}, x::RadixNumber{N, T}) where N where T = x
 
 
 @inline function convert(::Type{RadixNumber{N, T}}, x::Integer) where N where T

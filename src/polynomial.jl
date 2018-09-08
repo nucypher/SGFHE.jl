@@ -1,24 +1,19 @@
-import Base: +, -, *, length, div, ==, zero
-
-
 """
-Polynomials modulo `x^n+1` with the coefficients modulo `modulus`.
+Polynomials modulo `x^n+1`.
+The element type can be a modulo number (as long as it has arithmetic operators defined for it).
 """
-struct Polynomial{N, T}
-    coeffs :: Array{RRElemMontgomery{N, T}, 1}
+struct Polynomial{T}
+    coeffs :: Array{T, 1}
     cyclic :: Int
 
-    function Polynomial{N, T}(coeffs::AbstractArray{V, 1}, modulus::V, cyclic) where N where T where V <: Integer
+    function Polynomial(::Type{T}, coeffs::AbstractArray{V, 1}, cyclic) where T where V <: Integer
         # TODO: may be faster to do modulus only where it is necessary
-        modulus_r = RadixNumber{N, T}(modulus)
-        rr = ResidueRing(modulus_r)
-        coeffs_rr = RRElem.(rr, coeffs)
-        coeffs_rm = convert.(RRElemMontgomery{N, T}, coeffs_rr)
-        new{N, T}(coeffs_rm, cyclic)
+        coeffs_rm = convert.(T, coeffs)
+        new{T}(coeffs_rm, cyclic)
     end
 
-    function Polynomial(coeffs::Array{RRElemMontgomery{N, T}, 1}, cyclic) where N where T
-        new{N, T}(coeffs, cyclic)
+    function Polynomial(coeffs::Array{T, 1}, cyclic) where T
+        new{T}(coeffs, cyclic)
     end
 end
 
@@ -29,18 +24,18 @@ struct ZeroPolynomial
 end
 
 
-zero(::Polynomial{N, T}) where N where T = ZeroPolynomial()
+zero(::Polynomial{T}) where T = ZeroPolynomial()
 
-Base.length(p::Polynomial{N, T}) where N where T = length(p.coeffs)
+Base.length(p::Polynomial{T}) where T = length(p.coeffs)
 
 
-function ==(p1::Polynomial{N, T}, p2::Polynomial{N, T}) where N where T
+function ==(p1::Polynomial{T}, p2::Polynomial{T}) where T
     p1.cyclic == p2.cyclic && p1.coeffs == p2.coeffs
 end
 
 
-function *(p1::Polynomial{N, T}, p2::Polynomial{N, T}) where N where T
-    karatsuba_mul2(p1, p2)
+function *(p1::Polynomial{T}, p2::Polynomial{T}) where T
+    karatsuba_mul(p1, p2)
     #fast_reference_mul(p1.coeffs, p2.coeffs)
 end
 
@@ -48,7 +43,7 @@ end
 *(p1::ZeroPolynomial, p2::Polynomial) = ZeroPolynomial()
 
 
-#function *(p1::Polynomial{N, T}, p2::Integer) where N where T
+#function *(p1::Polynomial{T}, p2::Integer) where T
 #    Polynomial(p1.coeffs .* mod(p2, M), p1.cyclic)
 #end
 
@@ -56,17 +51,17 @@ end
 #    p2 * p1
 #end
 
-function *(p1::Polynomial{N, T}, p2::RRElemMontgomery{N, T}) where N where T
+function *(p1::Polynomial{T}, p2::T) where T
     Polynomial(p1.coeffs .* p2, p1.cyclic)
 end
 
 
-function +(p1::Polynomial{N, T}, p2::Polynomial{N, T}) where N where T
+function +(p1::Polynomial{T}, p2::Polynomial{T}) where T
     Polynomial(p1.coeffs .+ p2.coeffs, p1.cyclic)
 end
 
 
-function +(p1::Polynomial{N, T}, p2::RRElemMontgomery{N, T}) where N where T
+function +(p1::Polynomial{T}, p2::T) where T
     Polynomial(p1.coeffs .+ p2, p1.cyclic)
 end
 
@@ -74,7 +69,7 @@ end
 
 
 #=
-function show(io::IO, p::Polynomial{N, T}) where N where T
+function show(io::IO, p::Polynomial{T}) where T
     vs = value.(p.coeffs)
     print(io, "Polynomial{$(eltype(vs)), $M}($vs)")
 end
@@ -83,11 +78,11 @@ end
 #=
 
 
-with_modulus(p::Polynomial{N, T}, new_modulus::Integer) where N where T =
+with_modulus(p::Polynomial{T}, new_modulus::Integer) where T =
     Polynomial{UInt128(new_modulus)}(value.(p.coeffs), p.cyclic)
 
 
-function with_length(p::Polynomial{N, T}, new_length::Int) where M
+function with_length(p::Polynomial{T}, new_length::Int) where M
     @assert new_length >= length(p)
     Polynomial([p.coeffs; zeros(eltype(p.coeffs), new_length - length(p))], p.cyclic)
 end
@@ -135,7 +130,7 @@ end
 =#
 
 
-@Base.propagate_inbounds function shift(p::Polynomial{N, T}, shift::Integer) where N where T
+@Base.propagate_inbounds function shift(p::Polynomial{T}, shift::Integer) where T
     if shift == 0
         p
     else
@@ -161,8 +156,8 @@ end
 
 
 
-function reference_mul(p1::Polynomial{N, T}, p2::Polynomial{N, T}) where N where T
-    res = Polynomial([rr_zero(RRElemMontgomery{N, T}, p1.coeffs[1].value.rr) for i in 1:length(p1)], p1.cyclic)
+function reference_mul(p1::Polynomial{T}, p2::Polynomial{T}) where T
+    res = Polynomial(zeros(T, length(p1)), p1.cyclic)
     for (j, c) in enumerate(p1.coeffs)
         res = res + shift(p2, j - 1) * c
     end
@@ -170,9 +165,9 @@ function reference_mul(p1::Polynomial{N, T}, p2::Polynomial{N, T}) where N where
 end
 
 
-@Base.propagate_inbounds @inline function fast_reference_mul(p1::Polynomial{N, T}, p2::Polynomial{N, T}) where N where T
-    res = [rr_zero(RRElemMontgomery{N, T}, p1.coeffs[1].value.rr) for i in 1:length(p1)]
-    #cyclic_coeff = ModuloNumber{UInt128, M}(mod(-p1.cyclic, M))
+@Base.propagate_inbounds @inline function fast_reference_mul(p1::Polynomial{T}, p2::Polynomial{T}) where T
+    res = zeros(T, length(p1))
+
     for j in 1:length(p1)
         c = p1.coeffs[j]
 
@@ -184,13 +179,12 @@ end
             res[k] += p2.coeffs[k-j+1] * c
         end
 
-        #@views res[1:j-1] .+= p2.coeffs[end-j+2:end] .* (p1.cyclic == 1 ? -c : c)
-        #@views res[j:end] .+= p2.coeffs[1:end-j+1] .* c
     end
     Polynomial(res, p1.cyclic)
 end
 
 
+#=
 @inline function mul_with_overflow(res, p1, p2)
     l = length(p1)
     #res .= rr_zero(eltype(p1), p1[1].value.rr)
@@ -263,7 +257,7 @@ end
         + shift(Polynomial(r1, p1.cyclic), half_len)
         + shift(Polynomial(r2, p1.cyclic), half_len * 2))
 end
-
+=#
 
 
 @inline function mul_with_overflow2(l, res, res_s, p1, p1_s, p2, p2_s)
@@ -292,7 +286,7 @@ end
         half_len, res, res_s+full_len, p1c, p1_s+half_len, p2c, p2_s+half_len, buf, buf_s+full_len,
         buf2, buf2_s)
 
-    z = rr_zero(eltype(p1c), p1c[1].value.rr)
+    z = zero(eltype(p1c))
     @simd for i in buf_s:buf_s+full_len-1
         buf[i] = z
     end
@@ -315,12 +309,12 @@ end
 end
 
 
-@Base.propagate_inbounds @inline function karatsuba_mul(p1::Polynomial, p2::Polynomial)
+@Base.propagate_inbounds @inline function karatsuba_mul(p1::Polynomial{T}, p2::Polynomial{T}) where T
 
     full_len = length(p1)
     half_len = div(length(p1), 2)
 
-    z = rr_zero(eltype(p1.coeffs), p1.coeffs[1].value.rr)
+    z = zero(T)
     r0 = similar(p1.coeffs)
     r1 = similar(p1.coeffs)
     r2 = similar(p1.coeffs)

@@ -5,7 +5,7 @@ struct RadixNumber{N, T <: Unsigned}
     value :: NTuple{N, T}
 
     RadixNumber(x::NTuple{N, T}) where N where T = new{N, T}(x)
-    RadixNumber{N, T}(x::Integer) where N where T = new{N, T}(to_radix_ntuple(NTuple{N, T}, x))
+    RadixNumber{N, T}(x::Integer) where N where T = new{N, T}(to_radix(NTuple{N, T}, x))
 end
 
 
@@ -35,7 +35,7 @@ struct RRElem{N, T}
     # So it has to be performed directly.
     function RRElem(rr::ResidueRing{N, T}, x::Integer) where N where T
         # TODO: write an optimized version of this
-        m_i = from_radix_ntuple(BigInt, rr.modulus.value)
+        m_i = from_radix(BigInt, rr.modulus.value)
         mod_x = RadixNumber{N, T}(mod(x, m_i))
         new{N, T}(rr, mod_x)
     end
@@ -44,8 +44,8 @@ end
 
 function to_rrelem(rr::ResidueRing{N, T}, x::RadixNumber{N, T}) where N where T
     # TODO: write a mod() function for NTuples
-    m_i = from_radix_ntuple(BigInt, rr.modulus.value)
-    x_i = from_radix_ntuple(BigInt, x.value)
+    m_i = from_radix(BigInt, rr.modulus.value)
+    x_i = from_radix(BigInt, x.value)
     mod_x = RadixNumber{N, T}(mod(x_i, m_i))
     RRElem(rr, mod_x)
 end
@@ -57,7 +57,7 @@ end
 
 
 function Base.convert(::Type{V}, x::RadixNumber{N, T}) where V <: Integer where N where T
-    from_radix_ntuple(V, x.value)
+    from_radix(V, x.value)
 end
 
 

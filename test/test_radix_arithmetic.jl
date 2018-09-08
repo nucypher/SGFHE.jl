@@ -6,7 +6,7 @@ using Random
 
 using SGFHE:
     mprec_mul, to_radix, from_radix,
-    addmod_ntuple, submod_ntuple, to_radix_ntuple, from_radix_ntuple
+    addmod_ntuple, submod_ntuple, to_radix, from_radix
 
 
 function test_mprec_mul()
@@ -61,11 +61,11 @@ function test_addmod_ntuple()
 
         ref = mod(BigInt(x) + BigInt(y), BigInt(m))
 
-        xr = to_radix_ntuple(NTuple{len, tp}, x)
-        yr = to_radix_ntuple(NTuple{len, tp}, y)
-        mr = to_radix_ntuple(NTuple{len, tp}, m)
+        xr = to_radix(NTuple{len, tp}, x)
+        yr = to_radix(NTuple{len, tp}, y)
+        mr = to_radix(NTuple{len, tp}, m)
         resr = addmod_ntuple(xr, yr, mr)
-        res = from_radix_ntuple(BigInt, resr)
+        res = from_radix(BigInt, resr)
 
         @assert res == ref
     end
@@ -83,11 +83,11 @@ function test_submod_ntuple()
 
         ref = mod(BigInt(x) - BigInt(y), BigInt(m))
 
-        xr = to_radix_ntuple(NTuple{len, tp}, x)
-        yr = to_radix_ntuple(NTuple{len, tp}, y)
-        mr = to_radix_ntuple(NTuple{len, tp}, m)
+        xr = to_radix(NTuple{len, tp}, x)
+        yr = to_radix(NTuple{len, tp}, y)
+        mr = to_radix(NTuple{len, tp}, m)
         resr = submod_ntuple(xr, yr, mr)
-        res = from_radix_ntuple(BigInt, resr)
+        res = from_radix(BigInt, resr)
 
         @assert res == ref
     end

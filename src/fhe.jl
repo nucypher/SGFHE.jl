@@ -1,8 +1,5 @@
 using Random
 
-include("polynomial.jl")
-#include("lwe.jl")
-
 
 polynomial(coeffs, modulus) = Polynomial(coeffs, modulus, 1)
 
@@ -73,7 +70,7 @@ struct PrivateKey
     key :: Polynomial
 
     function PrivateKey(params::Params)
-        key = polynomial(convert.(BigInt, rand(Bool, params.n)), params.r)
+        key = polynomial(rand(Bool, params.n), params.r)
         new(params, key)
     end
 end

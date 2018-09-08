@@ -1,6 +1,7 @@
-using Random
+push!(LOAD_PATH, "../src")
 
-include("sgfhe.jl")
+using Random
+using SGFHE: Params, encrypt_private, encrypt_public, decrypt, PrivateKey, PublicKey
 
 
 function test_private()

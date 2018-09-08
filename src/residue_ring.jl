@@ -25,7 +25,6 @@ end
 
 
 @generated function montgomery_coeff(::Type{RRElem{T, M}}) where T where M
-    Core.println("generating for $T $(M.value)")
     res = get_montgomery_coeff_ntuple(M)
     :( $res )
 end
@@ -139,6 +138,15 @@ end
 end
 
 
+@inline function *(x::RRElem{T, M}, y::RRElem{T, M}) where T <: Unsigned where M
+    xt = x.value
+    yt = y.value
+    res = mulmod(xt, yt, M)
+    RRElem(res, M)
+end
+
+
+# TODO: need to create an abstract type for radix numbers, and restrict T to it.
 @inline function *(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T where M
     xt = x.value.value
     yt = y.value.value

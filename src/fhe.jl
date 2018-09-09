@@ -1,20 +1,28 @@
 using Random
 
 
-polynomial(coeffs, modulus) = Polynomial(coeffs, modulus, 1)
+function polynomial_small(coeffs, modulus::UInt64)
+    Polynomial(RRElem{UInt64, modulus}, coeffs, 1)
+end
+
+
+function polynomial_large(coeffs, modulus::RadixNumber{2, UInt64})
+    tp = RRElemMontgomery{RadixNumber{2, UInt64}, modulus}
+    Polynomial(tp, coeffs, 1)
+end
 
 
 struct Params
     n :: Int
-    r :: Int
-    q :: BigInt
-    Q :: BigInt
+    r :: UInt64
+    q :: UInt64
+    Q :: RadixNumber{2, UInt64}
     t :: Int
     m :: Int
-    B :: BigInt
+    B :: UInt64
     Dr :: Int
     Dq :: Int
-    DQ_tilde :: BigInt
+    DQ_tilde :: RadixNumber{2, UInt64}
 
     function Params(n::Int)
 
@@ -51,7 +59,10 @@ struct Params
         Dq = div(q, 4) # see above
         DQ_tilde = div(Q, 8) # see above
 
-        new(n, r, q, Q, t, m, B, Dr, Dq, DQ_tilde)
+        new(
+            n, UInt64(r), UInt64(q),
+            convert(RadixNumber{2, UInt64}, Q), t, m, UInt64(B), UInt64(Dr), UInt64(Dq),
+            convert(RadixNumber{2, UInt64}, DQ_tilde))
     end
 
 end
@@ -70,7 +81,7 @@ struct PrivateKey
     key :: Polynomial
 
     function PrivateKey(params::Params)
-        key = polynomial(rand(Bool, params.n), params.r)
+        key = polynomial_small(rand(Bool, params.n), params.r)
         new(params, key)
     end
 end
@@ -86,10 +97,11 @@ struct PublicKey
 
         params = sk.params
 
-        k0 = polynomial(convert.(BigInt, rand(Bool, params.n)), params.q)
+        k0 = polynomial_small(rand(0:params.q-1, params.n), params.q)
 
-        e_max = div(params.Dq, 41 * params.n) - 1
-        e = polynomial(rand(-e_max:e_max, params.n), params.q)
+        # More precisely, we need e_max < Dq / (41n)
+        e_max = cld(params.Dq, 41 * params.n) - 1
+        e = polynomial_small(rand(-e_max:e_max, params.n), params.q)
         k1 = k0 * with_modulus(sk.key, params.q) + e
 
         new(params, k0, k1)
@@ -210,18 +222,20 @@ function encrypt_private(key::PrivateKey, message::Array{Bool, 1})
 
     u = rand(Bool, params.n)
     a_bits = prng_expand(u, params.t + 1)
-    a = polynomial(packbits(BigInt, a_bits), params.r)
+    a = polynomial_small(packbits(BigInt, a_bits), params.r)
 
     # TODO: Why 1/8? According to p.6 in the paper, even 1/2 should work.
     w_range = div(params.Dr, 8)
 
-    w = polynomial(mod.(rand(-w_range:w_range, length(message)), params.r), params.r)
+    w = polynomial_small(rand(-w_range:w_range, length(message)), params.r)
 
-    message_poly = polynomial(message, params.r)
+    message_poly = polynomial_small(message, params.r)
     b1 = a * key.key + w + message_poly * params.Dr
 
-    b_packed = div(b1, 2^(params.t - 4))
-    v = unpackbits(b_packed.coeffs, 5)
+    # TODO: currently `div` is not implemented for RR elements,
+    # but we only need this part if we want the packed representation.
+    #b_packed = div(b1, 2^(params.t - 4))
+    #v = unpackbits(b_packed.coeffs, 5)
 
     # TODO: could only save `u` and `v` which take less space than `a` and `b`,
     # but contain the same information.
@@ -233,20 +247,20 @@ function encrypt_public(key::PublicKey, message:: Array{Bool, 1})
 
     params = key.params
 
-    u = polynomial(rand(-1:1, params.n), params.q)
+    u = polynomial_small(rand(-1:1, params.n), params.q)
 
     w1_max = div(params.Dq, 41 * params.n)
-    w1 = polynomial(rand(-w1_max:w1_max, params.n), params.q)
+    w1 = polynomial_small(rand(-w1_max:w1_max, params.n), params.q)
 
     w2_max = div(params.Dq, 82)
-    w2 = polynomial(rand(-w2_max:w2_max, params.n), params.q)
+    w2 = polynomial_small(rand(-w2_max:w2_max, params.n), params.q)
 
-    message_poly = polynomial(message, params.q)
+    message_poly = polynomial_small(message, params.q)
     a1 = key.k0 * u + w1
     a2 = key.k1 * u + w2 + message_poly * params.Dq
 
-    a = polynomial(round.(a1.coeffs * params.r / params.q), params.r)
-    b = polynomial(round.(a2.coeffs * params.r / params.q), params.r)
+    a = modulus_reduction(a1, params.r)
+    b = modulus_reduction(a2, params.r)
 
     # TODO: `b` can be safely divided further by `(2^(params.t - 5)` without loss of info.
     # For now we're saving the generic `b`, compatible with the one produced in private encryption.
@@ -259,16 +273,18 @@ end
 function decrypt(key::PrivateKey, ct::Ciphertext)
     params = key.params
 
-    # Plus half-interval (Dr) to "snap" to the values 0, Dr, 2Dr, ...
-    # div(x + Dr/2, Dr) is equivalent to round(x / Dr),
-    # but unlike it works well with the modulo values
-    # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
-
     # TODO: if we're using "packed" `b`, `ct.rlwe.b` should be multiplied
     # by `2^(params.t - 4)` (for private encrypted) or `2^(params.t - 5)` (for public encrpyted).
     b1 = ct.rlwe.b - key.key * ct.rlwe.a
 
-    convert.(Bool, div.(mod.(b1.coeffs .+ div(params.Dr, 2), params.r), params.Dr))
+    # Plus half-interval (Dr) to "snap" to the values 0, Dr, 2Dr, ...
+    # div(x + Dr/2, Dr) is equivalent to round(x / Dr),
+    # but unlike it works well with the modulo values
+    # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
+    # TODO: remove type hardcoding
+    b1_coeffs = convert.(UInt64, b1.coeffs .+ div(params.Dr, 2))
+
+    convert.(Bool, div.(b1_coeffs, params.Dr))
 end
 
 

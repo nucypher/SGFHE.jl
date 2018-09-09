@@ -78,6 +78,10 @@ convert(::Type{RRElemMontgomery{T, M}}, x::V) where V <: Integer where T where M
 
 
 # Required for broadcasting
+Base.length(x::RRElem{T, M}) where T where M = 1
+Base.iterate(x::RRElem{T, M}) where T where M = (x, nothing)
+Base.iterate(x::RRElem{T, M}, state) where T where M = nothing
+
 Base.length(x::RRElemMontgomery{T, M}) where T where M = 1
 Base.iterate(x::RRElemMontgomery{T, M}) where T where M = (x, nothing)
 Base.iterate(x::RRElemMontgomery{T, M}, state) where T where M = nothing
@@ -104,19 +108,21 @@ zero(::Type{RRElemMontgomery{T, M}}) where T where M = RRElemMontgomery(zero(RRE
 
 
 @inline function +(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
-    # TODO: @assert x.rr == y.rr
     RRElem(addmod(x.value, y.value, M), M)
 end
 
 
+@inline function +(x::RRElem{T, M}, y::Integer) where T where M
+    x + convert(RRElem{T, M}, y)
+end
+
+
 @inline function +(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T where M
-    # TODO: @assert x.rr == y.rr
     RRElemMontgomery(x.value + y.value)
 end
 
 
 @inline function -(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
-    # TODO: @assert x.rr == y.rr
     RRElem(submod(x.value, y.value, M), M)
 end
 
@@ -153,3 +159,37 @@ end
     res = mulmod_montgomery_ntuple(xt, yt, M, montgomery_coeff(RRElem{T, M}))
     RRElemMontgomery(RRElem(res, M))
 end
+
+
+@inline function with_modulus(x::RRElem{T, M}, new_modulus::Integer) where T where M
+    nm = convert(T, new_modulus)
+    convert(RRElem{T, nm}, x)
+end
+
+
+@inline function modulus_reduction(x::RRElem{T, M}, new_modulus::Integer) where T where M
+    nm = convert(T, new_modulus)
+    # TODO: optimize
+    xi = convert(BigInt, x)
+    mi = convert(BigInt, M)
+
+    # TODO: make it a purely integer algorithm
+    convert(RRElem{T, nm}, round(BigInt, xi * new_modulus / mi))
+end
+
+
+@inline function convert(::Type{RRElem{T, M}}, x::RRElem{T, M}) where T where M
+    # TODO: this shouldn't actually be called anywhere, but it seems to be.
+    x
+end
+
+
+@inline function convert(::Type{RRElem{T, N}}, x::RRElem{T, M}) where T where N where M
+    if N >= M
+        RRElem(x.value, N)
+    else
+        # TODO: optimize
+        RRElem(convert(T, convert(BigInt, x.value) % N))
+    end
+end
+

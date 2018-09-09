@@ -43,13 +43,13 @@ end
 *(p1::ZeroPolynomial, p2::Polynomial) = ZeroPolynomial()
 
 
-#function *(p1::Polynomial{T}, p2::Integer) where T
-#    Polynomial(p1.coeffs .* mod(p2, M), p1.cyclic)
-#end
+function *(p1::Polynomial{T}, p2::Integer) where T
+    Polynomial(p1.coeffs .* convert(T, p2), p1.cyclic)
+end
 
-#function *(p1::Integer, p2::Polynomial)
-#    p2 * p1
-#end
+function *(p1::Integer, p2::Polynomial)
+    p2 * p1
+end
 
 function *(p1::Polynomial{T}, p2::T) where T
     Polynomial(p1.coeffs .* p2, p1.cyclic)
@@ -61,11 +61,43 @@ function +(p1::Polynomial{T}, p2::Polynomial{T}) where T
 end
 
 
+#=
+TODO: these should actually work by only adding the scalar
+      to the first coefficient, not to all of them
+
 function +(p1::Polynomial{T}, p2::T) where T
     Polynomial(p1.coeffs .+ p2, p1.cyclic)
 end
 
 
+function +(p1::Polynomial{T}, p2::Integer) where T
+    Polynomial(p1.coeffs .+ convert(T, p2), p1.cyclic)
+end
+
+
+function +(p1::Integer, p2::Polynomial{T}) where T
+    p2 + p1
+end
+=#
+
+
+function -(p1::Polynomial{T}, p2::Polynomial{T}) where T
+    Polynomial(p1.coeffs .- p2.coeffs, p1.cyclic)
+end
+
+
+-(p1::Polynomial, p2::ZeroPolynomial) = p1
+
+
+with_modulus(p::Polynomial{T}, new_modulus::Integer) where T =
+    # TODO: technically, we need to only convert the modulus from Integer once
+    Polynomial(with_modulus.(p.coeffs, new_modulus), p.cyclic)
+
+
+function modulus_reduction(p::Polynomial{T}, new_modulus::Integer) where T
+    # TODO: technically, we need to only convert the modulus from Integer once
+    Polynomial(modulus_reduction.(p.coeffs, new_modulus), p.cyclic)
+end
 
 
 #=
@@ -76,10 +108,6 @@ end
 =#
 
 #=
-
-
-with_modulus(p::Polynomial{T}, new_modulus::Integer) where T =
-    Polynomial{UInt128(new_modulus)}(value.(p.coeffs), p.cyclic)
 
 
 function with_length(p::Polynomial{T}, new_length::Int) where M
@@ -106,13 +134,6 @@ end
 function +(p1::Polynomial{M}, p2::Integer) where M
     Polynomial([p1.coeffs[1] + mod(p2, M); p1.coeffs[2:end]], p1.cyclic)
 end
-
-
-function -(p1::Polynomial{M}, p2::Polynomial{M}) where M
-    Polynomial(p1.coeffs .- p2.coeffs, p1.cyclic)
-end
-
--(p1::Polynomial, p2::ZeroPolynomial) = p1
 
 
 #function div(p1::Polynomial, p2::Integer)

@@ -5,7 +5,7 @@ using BenchmarkTools
 using Random
 using SGFHE:
     Params, encrypt_private, encrypt_public, decrypt, PrivateKey, PublicKey,
-    flatten_deterministic, flatten, RRElem
+    flatten_deterministic, flatten, RRElem, RRElemMontgomery, RadixNumber
 
 
 function test_private()
@@ -77,7 +77,55 @@ function test_flatten_deterministic()
 end
 
 
+function test_flatten_montgomery()
+
+    tp = UInt8
+    len = 4
+    rtp = RadixNumber{len, tp}
+
+    modulus_i = 2^30-1
+    modulus_r = convert(rtp, modulus_i)
+
+    rrtp = RRElem{rtp, modulus_r}
+    mtp = RRElemMontgomery{rtp, modulus_r}
+
+    B_i = 2^20-1
+    B_rr = convert(rrtp, B_i)
+    B_m = convert(mtp, B_i)
+
+    l = 2
+    s_rr = (B_rr - 1) ÷ 2
+
+    lim_lo = -s_rr
+    lim_hi = B_rr - s_rr - 1
+
+    for i in 1:1000
+
+        a_i = rand(UInt32) % modulus_i
+
+        a_rr = convert(rrtp, a_i)
+        a_m = convert(mtp, a_i)
+
+        decomp_m = flatten_deterministic(a_m, B_m, l)
+        @assert eltype(decomp_m) == mtp
+
+        restore = sum(decomp_m .* B_m.^(0:l-1))
+        @assert restore == a_m
+
+        decomp_rr = convert.(rrtp, decomp_m)
+        restore_rr = sum(decomp_rr .* B_rr.^(0:l-1))
+        @assert restore_rr == a_rr
+
+        for d in decomp_rr
+            @assert d >= lim_hi || d <= lim_lo
+        end
+    end
+end
+
+
 function test_flatten_performance()
+
+    # Simple type performance
     modulus = UInt64(2^55 - 1)
     tp = RRElem{UInt64, modulus}
     l = 2
@@ -86,6 +134,21 @@ function test_flatten_performance()
 
     display(@benchmark flatten_deterministic($a, $B, $l))
     println()
+
+
+    # Radix type performance
+    modulus = BigInt(2)^80 - 1
+
+    rtp = RadixNumber{2, UInt64}
+    modulus_r = convert(rtp, modulus)
+    mtp = RRElemMontgomery{rtp, modulus_r}
+    l = 2
+    B_m = convert(mtp, 2^51 - 1)
+    a_m = convert(mtp, 2^79 - 1)
+
+    display(@benchmark flatten_deterministic($a_m, $B_m, $l))
+    println()
+
 end
 
 
@@ -222,6 +285,7 @@ end
 test_private()
 test_public()
 test_flatten_deterministic()
+test_flatten_montgomery()
 test_flatten_performance()
 test_flatten()
 test_decompose()

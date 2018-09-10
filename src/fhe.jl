@@ -296,7 +296,7 @@ function decrypt_lwe(key::PrivateKey, lwe::LWE)
 end
 
 
-function flatten_deterministic(a::RRElem{T, M}, B::RRElem{T, M}, l::Integer) where T where M
+function flatten_deterministic(a::T, B::T, l::Integer) where T <: AbstractRRElem
     # range offset
     if isodd(B)
         s = ((B - 1) ÷ 2)
@@ -307,7 +307,7 @@ function flatten_deterministic(a::RRElem{T, M}, B::RRElem{T, M}, l::Integer) whe
     # decomposition offset
     offset = s * sum(B.^(0:l-1))
 
-    decomp = Array{RRElem{T, M}}(undef, l)
+    decomp = Array{T}(undef, l)
     a_offset = a + offset
     for i in l-1:-1:0
         d, a_offset = divrem(a_offset, B^i)

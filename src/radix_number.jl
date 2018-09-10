@@ -104,6 +104,28 @@ end
 end
 
 
+@inline function <=(x::RadixNumber{N, T}, y::RadixNumber{N, T}) where N where T
+    for i in N:-1:1
+        if x.value[i] == y.value[i]
+            continue
+        end
+        return x.value[i] < y.value[i]
+    end
+    true
+end
+
+
+@inline function <(x::RadixNumber{N, T}, y::RadixNumber{N, T}) where N where T
+    for i in N:-1:1
+        if x.value[i] == y.value[i]
+            continue
+        end
+        return x.value[i] < y.value[i]
+    end
+    false
+end
+
+
 @inline function addmod(
         x::RadixNumber{N, T}, y::RadixNumber{N, T}, modulus::RadixNumber{N, T}) where N where T
     r = x + y
@@ -156,6 +178,41 @@ end
     w
 end
 
+
+function isodd(x::RadixNumber{N, T}) where N where T
+    isodd(x.value[1])
+end
+
+
+@inline function div(x::RadixNumber{N, T}, y::RadixNumber{N, T}) where N where T
+    # TODO: optimize
+    convert(RadixNumber{N, T}, div(convert(BigInt, x), convert(BigInt, y)))
+end
+
+
+@inline @generated function one(::Type{RadixNumber{N, T}}) where N where T
+    exprs = [i == 1 ? :(one(T)) : :(zero(T)) for i in 1:N]
+    quote
+        RadixNumber(tuple($(exprs...)))
+    end
+end
+
+
+function ^(x::RadixNumber{N, T}, y::Integer) where N where T
+    # TODO: optimize
+    res = one(RadixNumber{N, T})
+    @assert y >= 0
+    for i in 1:y
+        res *= x
+    end
+    res
+end
+
+
+function divrem(x::RadixNumber{N, T}, y::RadixNumber{N, T}) where N where T
+    d, r = divrem(convert(BigInt, x), convert(BigInt, y))
+    convert(RadixNumber{N, T}, d), convert(RadixNumber{N, T}, r)
+end
 
 
 #=

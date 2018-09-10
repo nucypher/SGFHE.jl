@@ -1,4 +1,7 @@
-struct RRElem{T, M}
+abstract type AbstractRRElem end
+
+
+struct RRElem{T, M} <: AbstractRRElem
     value :: T
 
     @inline function RRElem(x::T, m::T) where T
@@ -19,7 +22,7 @@ struct RRElem{T, M}
 end
 
 
-struct RRElemMontgomery{M, T}
+struct RRElemMontgomery{M, T} <: AbstractRRElem
     value :: RRElem{M, T}
 end
 
@@ -137,6 +140,11 @@ end
 end
 
 
+@inline function -(x::RRElemMontgomery{T, M}, y::Integer) where T where M
+    x - convert(RRElemMontgomery{T, M}, y)
+end
+
+
 @inline function -(x::RRElem{T, M}) where T where M
     # TODO: can be optimized
     zero(RRElem{T, M}) - x
@@ -154,6 +162,16 @@ end
     yt = y.value
     res = mulmod(xt, yt, M)
     RRElem(res, M)
+end
+
+
+@inline function *(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
+    # TODO: currently very slow, for testing purposes only
+    xi = convert(BigInt, x)
+    yi = convert(BigInt, y)
+    mi = convert(BigInt, M)
+    res = mod(xi * yi, mi)
+    RRElem(convert(T, res), M)
 end
 
 
@@ -199,7 +217,7 @@ end
 end
 
 
-function isodd(x::RRElem{T, M}) where T <:Integer where M
+function isodd(x::RRElem{T, M}) where T where M
     isodd(x.value)
 end
 
@@ -217,9 +235,9 @@ end
 one(::Type{RRElem{T, M}}) where T where M = RRElem(one(T), M)
 
 
-function ^(x::RRElem{T, M}, y::Integer) where T where M
+function ^(x::T, y::Integer) where T <: AbstractRRElem
     # TODO: optimize
-    res = one(RRElem{T, M})
+    res = one(T)
     @assert y >= 0
     for i in 1:y
         res *= x
@@ -230,7 +248,7 @@ end
 
 function divrem(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
     d, r = divrem(x.value, y.value)
-    RRElem(T(d), M), RRElem(T(r), M)
+    RRElem(d, M), RRElem(r, M)
 end
 
 
@@ -248,4 +266,30 @@ end
 
 function >=(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
     x.value >= y.value
+end
+
+
+function isodd(x::RRElemMontgomery{T, M}) where T where M
+    # TODO: optimize? Although currently it is not critical to the performance
+    isodd(convert(RRElem{T, M}, x))
+end
+
+
+@generated function one(::Type{RRElemMontgomery{T, M}}) where T where M
+    res = convert(RRElemMontgomery{T, M}, one(RRElem{T, M}))
+    :( $res )
+end
+
+
+function div(x::RRElemMontgomery{T, M}, y::Integer) where T where M
+    convert(RRElemMontgomery{T, M}, div(convert(RRElem{T, M}, x), y))
+end
+
+
+function divrem(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T where M
+    # TODO: optimize
+    xr = convert(RRElem{T, M}, x)
+    yr = convert(RRElem{T, M}, y)
+    d, r = divrem(xr, yr)
+    convert(RRElemMontgomery{T, M}, d), convert(RRElemMontgomery{T, M}, r)
 end

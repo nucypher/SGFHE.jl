@@ -160,6 +160,8 @@ end
 
 # Multiplication that ignores overflow (that is, returns a number of the same length as the inputs).
 @inline function *(x::RadixNumber{N, T}, y::RadixNumber{N, T}) where N where T
+    # TODO: to protect from timing attacks we can assume n == t == N
+    # This will also allow us to use a generated function and may turn out to be faster...
     n = _most_significant_digit(x)
     t = _most_significant_digit(y)
     w = zero(RadixNumber{N, T})
@@ -173,7 +175,6 @@ end
             w = setindex(w, lo, i + j - 1)
             c = hi
         end
-        #w = setindex(w, hi, i + n)
     end
     w
 end

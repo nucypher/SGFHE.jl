@@ -127,6 +127,11 @@ end
 end
 
 
+@inline function -(x::RRElem{T, M}, y::Integer) where T where M
+    x - convert(RRElem{T, M}, y)
+end
+
+
 @inline function -(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T where M
     RRElemMontgomery(x.value - y.value)
 end
@@ -193,3 +198,54 @@ end
     end
 end
 
+
+function isodd(x::RRElem{T, M}) where T <:Integer where M
+    isodd(x.value)
+end
+
+
+function div(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
+    RRElem(div(x.value, y.value), M)
+end
+
+
+function div(x::RRElem{T, M}, y::Integer) where T where M
+    div(x, convert(RRElem{T, M}, y))
+end
+
+
+one(::Type{RRElem{T, M}}) where T where M = RRElem(one(T), M)
+
+
+function ^(x::RRElem{T, M}, y::Integer) where T where M
+    # TODO: optimize
+    res = one(RRElem{T, M})
+    @assert y >= 0
+    for i in 1:y
+        res *= x
+    end
+    res
+end
+
+
+function divrem(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
+    d, r = divrem(x.value, y.value)
+    RRElem(T(d), M), RRElem(T(r), M)
+end
+
+
+function <(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
+    x.value < y.value
+end
+
+function >(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
+    x.value > y.value
+end
+
+function <=(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
+    x.value <= y.value
+end
+
+function >=(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
+    x.value >= y.value
+end

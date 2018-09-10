@@ -296,27 +296,24 @@ function decrypt_lwe(key::PrivateKey, lwe::LWE)
 end
 
 
-function flatten_deterministic(a, B, l, q)
+function flatten_deterministic(a::RRElem{T, M}, B::RRElem{T, M}, l::Integer) where T where M
+    # range offset
+    if isodd(B)
+        s = ((B - 1) ÷ 2)
+    else
+        s = (B ÷ 2 - 1)
+    end
 
-    decomp = Array{typeof(a)}(undef, l)
+    # decomposition offset
+    offset = s * sum(B.^(0:l-1))
+
+    decomp = Array{RRElem{T, M}}(undef, l)
+    a_offset = a + offset
     for i in l-1:-1:0
-        d, a = divrem(a, B^i)
+        d, a_offset = divrem(a_offset, B^i)
         decomp[i + 1] = d
     end
-
-    # TODO: perhaps, can work entirely on positive numbers
-    # Then this part is not needed.
-    # Also, it only works when the modulo of `a` is exactly `B^l`
-    for i in 1:l
-        if decomp[i] > B / 2
-            if i < l
-                decomp[i+1] += 1
-            end
-            decomp[i] = decomp[i] - B
-        end
-    end
-
-    decomp
+    decomp .- s
 end
 
 

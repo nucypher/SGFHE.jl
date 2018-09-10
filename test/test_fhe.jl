@@ -1,7 +1,11 @@
 push!(LOAD_PATH, "../src")
 
+using BenchmarkTools
+
 using Random
-using SGFHE: Params, encrypt_private, encrypt_public, decrypt, PrivateKey, PublicKey
+using SGFHE:
+    Params, encrypt_private, encrypt_public, decrypt, PrivateKey, PublicKey,
+    flatten_deterministic, flatten, RRElem
 
 
 function test_private()
@@ -39,19 +43,51 @@ end
 
 
 function test_flatten_deterministic()
-    for l in 3:4
-        for B in 3:4
-            q = B^l
-            for a in 0:q-1
-                decomp = flatten_deterministic(a, B, l, q)
-                restore = mod(sum(decomp .* B.^(0:l-1)), q)
-                #@assert all(decomp .> -B/2) && all(decomp .<= B/2)
-                @assert all(d >= q-B/2 || d <= B/2 for d in decomp)
-                @assert restore == a
+    for l in (3, 4)
+        for B in (3, 4)
+            for q in (B^l, B^l - 3)
+                if isodd(B)
+                    s = (B - 1) ÷ 2
+                else
+                    s = B ÷ 2 - 1
+                end
+
+                modulus = UInt16(q)
+                tp = RRElem{UInt16, modulus}
+
+                lim_lo = convert(tp, q - s)
+                lim_hi = convert(tp, B - s - 1)
+
+                B_rr = convert(tp, B)
+                for a in 0:q-1
+
+                    a_rr = convert(tp, a)
+
+                    decomp_rr = flatten_deterministic(a_rr, B_rr, l)
+                    @assert eltype(decomp_rr) == tp
+
+                    restore_rr = sum(decomp_rr .* B_rr.^(0:l-1))
+
+                    @assert all(d >= lim_hi || d <= lim_lo for d in decomp_rr)
+                    @assert restore_rr == a_rr
+                end
             end
         end
     end
 end
+
+
+function test_flatten_performance()
+    modulus = UInt64(2^55 - 1)
+    tp = RRElem{UInt64, modulus}
+    l = 2
+    B = convert(tp, 2^31 - 1)
+    a = convert(tp, 2^50 - 1)
+
+    display(@benchmark flatten_deterministic($a, $B, $l))
+    println()
+end
+
 
 
 function test_flatten()
@@ -186,6 +222,7 @@ end
 test_private()
 test_public()
 test_flatten_deterministic()
+test_flatten_performance()
 test_flatten()
 test_decompose()
 test_external_product()

@@ -1,4 +1,6 @@
-import Base: +, -, *, ==, >, >=, convert, show, zero, setindex, length, div
+import Base:
+    +, -, *, ^, ==, >, >=, <, <=,
+    convert, show, zero, setindex, length, div, divrem, isodd, one
 
 
 struct RadixNumber{N, T <: Unsigned}

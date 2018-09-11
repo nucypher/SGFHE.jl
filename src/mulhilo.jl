@@ -11,6 +11,9 @@ _low_mask(::Type{UInt64}) = UInt64(0xffffffff)
 _low_mask(::Type{UInt128}) = UInt128(0xffffffffffffffff)
 
 
+_low_shift(tp::Type{<:Unsigned}) = sizeof(tp) * 4
+
+
 # Adopted from one of the methods of `widemul()` from Julia base library
 function mulhilo_same_type(u::T, v::T) where T <: Unsigned
 
@@ -18,7 +21,7 @@ function mulhilo_same_type(u::T, v::T) where T <: Unsigned
     local u1::T, v1::T, w1::T, w2::T, t::T
 
     m = _low_mask(T)
-    shift = sizeof(T) * 4
+    shift = _low_shift(T)
 
     u0 = u & m; u1 = u >>> shift
     v0 = v & m; v1 = v >>> shift
@@ -38,7 +41,7 @@ function mulhilo_widen(u::T, v::T) where T <: Unsigned
     TT = widen(T)
     r = widemul(u, v)
     m = _low_mask(TT)
-    shift = sizeof(TT) * 4
+    shift = bitsize(T)
     T(r & m), T(r >> shift)
 end
 

@@ -4,11 +4,11 @@ using BenchmarkTools
 using Random
 
 
-using SGFHE: mulhilo
+using SGFHE: mulhilo, bitsize
 
 
 function mulhilo_ref(a::T, b::T) where T <: Unsigned
-    bits = sizeof(T) * 8
+    bits = bitsize(T)
     ref = BigInt(a) * BigInt(b)
     refl = ref & typemax(T)
     refh = ref >> bits

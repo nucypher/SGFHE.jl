@@ -129,7 +129,7 @@ function to_montgomery(x::RadixNumber{N, T}, m::RadixNumber{N, T}) where N where
     # TODO: find a way to do it without the BigInt conversion
     xb = convert(BigInt, x)
     mb = convert(BigInt, m)
-    R = BigInt(1) << (sizeof(T) * 8 * N)
+    R = BigInt(1) << (bitsize(T) * N)
     convert(RadixNumber{N, T}, (xb * R) % mb)
 end
 

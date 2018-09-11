@@ -1,6 +1,6 @@
 import Base:
-    +, -, *, ^, ==, >, >=, <, <=,
-    convert, show, zero, setindex, getindex, length, div, divrem, isodd, one
+    +, -, *, ^, ==, >, >=, <, <=, typemin, typemax, widen, promote_type,
+    convert, show, zero, setindex, getindex, length, div, rem, divrem, isodd, one
 
 
 struct RadixNumber{N, T <: Unsigned}
@@ -14,7 +14,7 @@ end
 @inline function convert(::Type{V}, x::RadixNumber{N, T}) where V <: Integer where N where T
     res = zero(V)
     for i in 1:N
-        res += V(x.value[i]) << (sizeof(T) * 8 * (i-1))
+        res += V(x.value[i]) << (bitsize(T) * (i-1))
     end
     res
 end
@@ -28,7 +28,7 @@ convert(::Type{RadixNumber{N, T}}, x::RadixNumber{N, T}) where N where T = x
     res = zero(RadixNumber{N, T})
     for i in 1:N
         res = setindex(res, T(x & typemax(T)), i)
-        x >>= sizeof(T) * 8
+        x >>= bitsize(T)
     end
     res
 end

@@ -6,6 +6,8 @@ include("single_arithmetic.jl")
 include("radix_number.jl")
 include("radix_mulmod_montgomery.jl")
 
+include("uint4.jl")
+
 include("residue_ring.jl")
 include("residue_ring_montgomery.jl")
 

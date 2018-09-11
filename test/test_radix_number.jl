@@ -4,7 +4,7 @@ using BenchmarkTools
 using Random
 
 
-using SGFHE: RadixNumber, divhilo, _sub_mul
+using SGFHE: RadixNumber, divhilo, _sub_mul, UInt4, bitsize
 
 
 function test_mul()
@@ -13,9 +13,9 @@ function test_mul()
     rtp = RadixNumber{len, UInt8}
 
     for i in 1:1000
-        x = BigInt(rand(UInt128(0):UInt128(2)^(sizeof(tp) * 8 * len)-1))
-        y = BigInt(rand(UInt128(0):UInt128(2)^(sizeof(tp) * 8 * len)-1))
-        ref = (x * y) % (BigInt(1) << (sizeof(tp) * 8 * len))
+        x = BigInt(rand(UInt128(0):UInt128(2)^(bitsize(tp) * len)-1))
+        y = BigInt(rand(UInt128(0):UInt128(2)^(bitsize(tp) * len)-1))
+        ref = (x * y) % (BigInt(1) << (bitsize(tp) * len))
 
         xr = convert(rtp, x)
         yr = convert(rtp, y)
@@ -33,9 +33,9 @@ function test_add()
     rtp = RadixNumber{len, UInt8}
 
     for i in 1:1000
-        x = BigInt(rand(UInt128(0):UInt128(2)^(sizeof(tp) * 8 * len)-1))
-        y = BigInt(rand(UInt128(0):UInt128(2)^(sizeof(tp) * 8 * len)-1))
-        ref = (x + y) % (BigInt(1) << (sizeof(tp) * 8 * len))
+        x = BigInt(rand(UInt128(0):UInt128(2)^(bitsize(tp) * len)-1))
+        y = BigInt(rand(UInt128(0):UInt128(2)^(bitsize(tp) * len)-1))
+        ref = (x + y) % (BigInt(1) << (bitsize(tp) * len))
 
         xr = convert(rtp, x)
         yr = convert(rtp, y)
@@ -53,12 +53,12 @@ function test_sub()
     rtp = RadixNumber{len, UInt8}
 
     for i in 1:1000
-        x = BigInt(rand(UInt128(0):UInt128(2)^(sizeof(tp) * 8 * len)-1))
-        y = BigInt(rand(UInt128(0):UInt128(2)^(sizeof(tp) * 8 * len)-1))
+        x = BigInt(rand(UInt128(0):UInt128(2)^(bitsize(tp) * len)-1))
+        y = BigInt(rand(UInt128(0):UInt128(2)^(bitsize(tp) * len)-1))
 
         # Using `mod` here,
         # because `%` does not produce a positive number when applied to a negative number.
-        ref = mod(x - y, BigInt(1) << (sizeof(tp) * 8 * len))
+        ref = mod(x - y, BigInt(1) << (bitsize(tp) * len))
 
         xr = convert(rtp, x)
         yr = convert(rtp, y)
@@ -104,7 +104,7 @@ function test_sub_mul()
 
     tp = UInt8
     len = 4
-    rmod = BigInt(2)^(sizeof(tp) * 8 * len)
+    rmod = BigInt(2)^(bitsize(tp) * len)
 
     Random.seed!(123)
 
@@ -138,30 +138,33 @@ function test_sub_mul()
 end
 
 
-function test_divrem()
-    len = 2
-    tp = UInt64
-    rtp = RadixNumber{len, tp}
+function test_divrem_exhaustive()
 
-    for i in 1:1000
-        x = BigInt(rand(UInt128(0):UInt128(2)^(sizeof(tp) * 8 * len)-1))
-        y = BigInt(rand(UInt128(0):UInt128(2)^(sizeof(tp) * 8 * len)-1))
-        d, r = divrem(x, y)
+    for len in (1, 2, 3)
+        rtp = RadixNumber{len, UInt4}
 
-        xr = convert(rtp, x)
-        yr = convert(rtp, y)
+        for x in 0:16^len-1
+            for y in 1:16^len-1
 
-        println("Starting")
-        dr, rr = divrem(xr, yr)
+                d, r = divrem(x, y)
 
-        d_test = convert(BigInt, dr)
-        r_test = convert(BigInt, rr)
+                xr = convert(rtp, x)
+                yr = convert(rtp, y)
 
-        println("x=$x, y=$y, d=$dr, r=$rr")
-        println("ref: d=$(convert(rtp, d)), r=$(convert(rtp, r))")
+                println("x=$x ($xr), y=$y ($yr)")
 
-        @assert d_test == d
-        @assert r_test == r
+                dr, rr = divrem(xr, yr)
+
+                d_test = convert(BigInt, dr)
+                r_test = convert(BigInt, rr)
+
+                println("test: d=$dr, r=$rr")
+                println("ref : d=$(convert(rtp, d)), r=$(convert(rtp, r))")
+
+                @assert d_test == d
+                @assert r_test == r
+            end
+        end
     end
 end
 
@@ -193,6 +196,6 @@ test_sub()
 test_divhilo()
 test_divhilo_performance()
 test_sub_mul()
-test_divrem()
 test_divrem_performance()
+test_divrem_exhaustive()
 

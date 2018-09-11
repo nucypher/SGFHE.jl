@@ -18,7 +18,7 @@ function test_montgomery_coeff()
 
     for i in 1:1000
 
-        m = rand(UInt128(1):UInt128(2)^(sizeof(tp) * (8 * len - 1))) * 2 + 1
+        m = rand(UInt128(1):UInt128(2)^(bitsize(tp) * len - 1)) * 2 + 1
         mr = to_radix(tp, m, len)
 
         @assert from_radix(BigInt, mr) == m
@@ -36,7 +36,7 @@ function test_mul_addto_array()
 
     tp = UInt8
     len = 4
-    rmod = BigInt(2)^(sizeof(tp) * 8 * (len + 1))
+    rmod = BigInt(2)^(bitsize(tp) * (len + 1))
 
     # To test the carry3:
     # c = UInt8(0xf1)
@@ -81,10 +81,10 @@ function test_mulmod_montgomery_ntuple()
     tp = UInt64
     len = 2
 
-    R = BigInt(2)^(sizeof(tp) * 8 * len)
+    R = BigInt(2)^(bitsize(tp) * len)
 
     for i in 1:1000
-        m = rand(UInt128(1):UInt128(2)^(sizeof(tp) * (8 * len - 1))) * 2 + 1
+        m = rand(UInt128(1):UInt128(2)^(bitsize(tp) * len - 1)) * 2 + 1
         x = rand(UInt128(0):m-1)
         y = rand(UInt128(0):m-1)
 
@@ -160,10 +160,10 @@ function test_from_montgomery_ntuple()
     tp = UInt8
     len = 5
 
-    R = BigInt(2)^(sizeof(tp) * 8 * len)
+    R = BigInt(2)^(bitsize(tp) * len)
 
     for i in 1:1000
-        m = rand(UInt128(1):UInt128(2)^(sizeof(tp) * (8 * len - 1))) * 2 + 1
+        m = rand(UInt128(1):UInt128(2)^(bitsize(tp) * len - 1)) * 2 + 1
         x = rand(UInt128(0):m-1)
 
         m = BigInt(m)
@@ -186,10 +186,10 @@ function test_to_montgomery_ntuple()
     tp = UInt8
     len = 5
 
-    R = BigInt(2)^(sizeof(tp) * 8 * len)
+    R = BigInt(2)^(bitsize(tp) * len)
 
     for i in 1:1000
-        m = rand(UInt128(1):UInt128(2)^(sizeof(tp) * (8 * len - 1))) * 2 + 1
+        m = rand(UInt128(1):UInt128(2)^(bitsize(tp) * len - 1)) * 2 + 1
         x = rand(UInt128(0):m-1)
 
         m = BigInt(m)

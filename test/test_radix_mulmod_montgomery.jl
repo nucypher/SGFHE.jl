@@ -77,86 +77,6 @@ function test_mul_addto_array()
 end
 
 
-function test_mulmod_montgomery_array()
-    tp = UInt8
-    len = 5
-
-    R = BigInt(2)^(sizeof(tp) * 8 * len)
-
-    for i in 1:1000
-        m = rand(UInt128(1):UInt128(2)^(sizeof(tp) * (8 * len - 1))) * 2 + 1
-        x = rand(UInt128(0):m-1)
-        y = rand(UInt128(0):m-1)
-
-        m = BigInt(m)
-        x = BigInt(x)
-        y = BigInt(y)
-
-        #println("x=$x, y=$y, m=$m")
-        #println("xM = $((x * R) % m)")
-        #println("yM = $((y * R) % m)")
-        #println("R = $R")
-
-        mr = to_radix(tp, m, len)
-        xr = to_radix(tp, (x * R) % m, len)
-        yr = to_radix(tp, (y * R) % m, len)
-
-        m_prime = get_montgomery_coeff(mr)
-
-        pr = mulmod_montgomery_array(xr, yr, mr, m_prime)
-        p = from_radix(BigInt, pr)
-
-        #inv_r = invmod(R, m)
-        ref = mod(x * y * R, m)
-
-        #println("got: ", to_radix(UInt8, ref, 4))
-        #println("ref: ", pr)
-
-        @assert ref == p
-    end
-end
-
-
-function test_mulmod_montgomery_tuple()
-    tp = UInt64
-    len = 2
-
-    R = BigInt(2)^(sizeof(tp) * 8 * len)
-
-    for i in 1:1000
-        m = rand(UInt128(1):UInt128(2)^(sizeof(tp) * (8 * len - 1))) * 2 + 1
-        x = rand(UInt128(0):m-1)
-        y = rand(UInt128(0):m-1)
-
-        m = BigInt(m)
-        x = BigInt(x)
-        y = BigInt(y)
-
-        #println("x=$x, y=$y, m=$m")
-        #println("xM = $((x * R) % m)")
-        #println("yM = $((y * R) % m)")
-        #println("R = $R")
-
-        mr = tuple(to_radix(tp, m, len)...)
-        xr = tuple(to_radix(tp, (x * R) % m, len)...)
-        yr = tuple(to_radix(tp, (y * R) % m, len)...)
-
-        m_prime = get_montgomery_coeff(collect(mr))
-
-        pr = mulmod_montgomery_tuple(xr, yr, mr, m_prime)
-        p = from_radix(BigInt, collect(pr))
-
-        #inv_r = invmod(R, m)
-        ref = mod(x * y * R, m)
-
-        #println("got: ", to_radix(UInt8, ref, 4))
-        #println("ref: ", pr)
-
-        @assert ref == p
-    end
-end
-
-
 function test_mulmod_montgomery_ntuple()
     tp = UInt64
     len = 2
@@ -197,51 +117,6 @@ function test_mulmod_montgomery_ntuple()
 end
 
 
-
-using StaticArrays
-
-function test_mulmod_montgomery_sarray()
-    tp = UInt8
-    len = 5
-
-    R = BigInt(2)^(sizeof(tp) * 8 * len)
-
-    Random.seed!(123)
-
-    for i in 1:1000
-        m = rand(UInt128(1):UInt128(2)^(sizeof(tp) * (8 * len - 1))) * 2 + 1
-        x = rand(UInt128(0):m-1)
-        y = rand(UInt128(0):m-1)
-
-        m = BigInt(m)
-        x = BigInt(x)
-        y = BigInt(y)
-
-        #println("x=$x, y=$y, m=$m")
-        #println("xM = $((x * R) % m)")
-        #println("yM = $((y * R) % m)")
-        #println("R = $R")
-
-        mr = SVector(to_radix(tp, m, len)...)
-        xr = SVector(to_radix(tp, (x * R) % m, len)...)
-        yr = SVector(to_radix(tp, (y * R) % m, len)...)
-
-        m_prime = get_montgomery_coeff(collect(mr))
-
-        pr = mulmod_montgomery_sarray(xr, yr, mr, m_prime)
-        p = from_radix(BigInt, collect(pr))
-
-        #inv_r = invmod(R, m)
-        ref = mod(x * y * R, m)
-
-        #println("test ", collect(pr))
-        #println("ref  ", to_radix(UInt8, ref, 5))
-
-        @assert ref == p
-    end
-end
-
-
 function test_performance()
 
     tp = UInt64
@@ -256,28 +131,12 @@ function test_performance()
     mr = to_radix(tp, modulus, len)
     m_prime = get_montgomery_coeff(mr)
 
-    #display(@benchmark mulmod_montgomery_array($ar, $br, $mr, $m_prime))
-    println()
-
     at = tuple(ar...)
     bt = tuple(br...)
     mt = tuple(mr...)
 
-    display(@benchmark mulmod_montgomery_tuple($at, $bt, $mt, $m_prime))
-    println()
-
-
     display(@benchmark mulmod_montgomery_ntuple($at, $bt, $mt, $m_prime))
     println()
-
-
-    at = SVector(ar...)
-    bt = SVector(br...)
-    mt = SVector(mr...)
-
-    #display(@benchmark mulmod_montgomery_sarray($at, $bt, $mt, $m_prime))
-    println()
-
 
     #display(@benchmark mulmod($a, $b, $modulus))
     #println()

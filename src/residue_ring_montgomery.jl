@@ -37,7 +37,7 @@ Base.iterate(x::RRElemMontgomery{T, M}, state) where T where M = nothing
 
 function show(io::IO, x::RRElemMontgomery{T, M}) where T where M
     show(io, x.value)
-    print(io, "RRM")
+    print(io, "M")
 end
 
 

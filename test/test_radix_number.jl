@@ -160,6 +160,7 @@ function test_divrem_exhaustive()
         rtp = RadixNumber{len, UInt4}
 
         for x in 0:16^len-1
+            println(x)
             for y in 1:16^len-1
 
                 d, r = divrem(x, y)
@@ -167,15 +168,17 @@ function test_divrem_exhaustive()
                 xr = convert(rtp, x)
                 yr = convert(rtp, y)
 
-                println("x=$x ($xr), y=$y ($yr)")
-
                 dr, rr = divrem(xr, yr)
 
                 d_test = convert(BigInt, dr)
                 r_test = convert(BigInt, rr)
 
-                println("test: d=$dr, r=$rr")
-                println("ref : d=$(convert(rtp, d)), r=$(convert(rtp, r))")
+                if d_test != d || r_test != r
+                    println("Error!")
+                    println("x=$x ($xr), y=$y ($yr)")
+                    println("test: d=$dr, r=$rr")
+                    println("ref : d=$(convert(rtp, d)), r=$(convert(rtp, r))")
+                end
 
                 @assert d_test == d
                 @assert r_test == r

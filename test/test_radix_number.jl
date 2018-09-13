@@ -4,7 +4,7 @@ using BenchmarkTools
 using Random
 
 
-using SGFHE: RadixNumber, divhilo, _sub_mul, UInt4, bitsize
+using SGFHE: RadixNumber, divhilo, modhilo, _sub_mul, UInt4, bitsize
 
 
 function test_mul()
@@ -135,6 +135,22 @@ function test_sub_mul()
         @assert carry == ref_carry
     end
 
+end
+
+
+function test_modhilo()
+    tp = UInt4
+
+    for x1 in 0:15
+        for x0 in 0:15
+            for y in x1+1:15
+                ref = mod(Int(x0) + Int(x1) * (typemax(tp) + 1), Int(y))
+                test = modhilo(tp(x0), tp(x1), tp(y))
+                #println("x0=$x0, x1=$x1, y=$y, test=$test, ref=$ref")
+                @assert ref == test
+            end
+        end
+    end
 end
 
 

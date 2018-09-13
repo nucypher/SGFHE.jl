@@ -12,6 +12,7 @@ convert(tp::Type{<:Integer}, x::UInt4) = convert(tp, x.value)
 
 
 promote_type(tp::Type{<:Integer}, ::Type{UInt4}) = tp
+promote_type(::Type{UInt4}, tp::Type{<:Integer}) = tp
 
 
 show(io::IO, x::UInt4) = print(io, uppercase(repr(x.value)[end]))

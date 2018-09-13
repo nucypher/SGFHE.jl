@@ -49,6 +49,7 @@ end
     RadixNumber(setindex(x.value, v, i))
 end
 
+
 @inline getindex(x::RadixNumber{N, T}, i::Integer) where N where T = x.value[i]
 
 
@@ -302,6 +303,26 @@ function _sub_mul(x::RadixNumber{N, T}, y::T, z::RadixNumber{N, T}) where N wher
 end
 
 
+function modhilo(lo::T, hi::T, y::T) where T
+    # assuming hi < y
+    q1 = divhilo(lo, hi, y)
+    z1, z2 = mulhilo(q1, y)
+    lo - z1
+end
+
+
+function divrem_single_digit(x::RadixNumber{N, T}, n, y::T) where N where T
+    # assuming x[end] < y
+    r = zero(T)
+    q = zero(RadixNumber{N, T})
+    for j in N-1:-1:0
+        q = setindex(q, divhilo(x[j+1], r, y), j+1)
+        r = modhilo(x[j+1], r, y)
+    end
+    q, r
+end
+
+
 function divrem(x::RadixNumber{N, T}, y::RadixNumber{N, T}) where N where T
     n = _most_significant_digit(x) - 1
     t = _most_significant_digit(y) - 1
@@ -318,23 +339,18 @@ function divrem(x::RadixNumber{N, T}, y::RadixNumber{N, T}) where N where T
         return setindex(q, q1, 1), setindex(r, r1, 1)
     end
 
+    if t == 0
+        return divrem_single_digit(x, n, y[1])
+    end
+
     # TODO: can be replaced by `<` and `shift_digits`
     while _ge_shift(x, y, n - t)
         q = setindex(q, q[n - t + 1] + one(T), n - t + 1)
         x = x - _shift_digits(y, n - t)
     end
 
-    if n == 1 && t == 0
-        r = divhilo(x[1], x[2], y[1])
-        lo, hi = addhilo(q[1], q[2], r)
-        q = q + RadixNumber((lo, hi))
-
-        r = _sub_mul(x, r, RadixNumber((y[1], zero(T))))
-        return q, r
-    end
-
     for i in n:-1:t+1
-        if x[i] == y[t]
+        if x[i+1] == y[t+1]
             q = setindex(q, typemax(T), i - t - 1 + 1)
         else
             q = setindex(q, divhilo(x[i-1+1], x[i+1], y[t+1]), i - t - 1 + 1)

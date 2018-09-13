@@ -319,7 +319,7 @@ function divrem_single_digit(x::RadixNumber{N, T}, n, y::T) where N where T
         q = setindex(q, divhilo(x[j+1], r, y), j+1)
         r = modhilo(x[j+1], r, y)
     end
-    q, r
+    q, setindex(zero(RadixNumber{N, T}), r, 1)
 end
 
 

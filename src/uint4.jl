@@ -15,6 +15,11 @@ promote_type(tp::Type{<:Integer}, ::Type{UInt4}) = tp
 promote_type(::Type{UInt4}, tp::Type{<:Integer}) = tp
 
 
+# Seems to be necessary for the proper work of `show()`
+# TODO: figure out if there is a more logical way.
+Base.ndigits0z(x::UInt4, base::Integer) = 1
+
+
 show(io::IO, x::UInt4) = print(io, uppercase(repr(x.value)[end]))
 
 

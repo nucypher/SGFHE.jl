@@ -136,6 +136,17 @@ function test_flatten_performance()
     println()
 
 
+    # Simple type performance
+    modulus = UInt128(2)^80 - 1
+    tp = RRElem{UInt128, modulus}
+    l = 2
+    B = convert(tp, UInt128(2)^51 - 1)
+    a = convert(tp, UInt128(2)^79 - 1)
+
+    display(@benchmark flatten_deterministic($a, $B, $l))
+    println()
+
+
     # Radix type performance
     modulus = BigInt(2)^80 - 1
 

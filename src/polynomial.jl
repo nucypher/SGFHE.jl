@@ -361,10 +361,5 @@ end
     end
 
     Polynomial(r0, p1.cyclic)
-
-    #return (
-    #    Polynomial(r0, p1.cyclic)
-    #    + shift(Polynomial(r1, p1.cyclic), half_len)
-    #    + shift(Polynomial(r2, p1.cyclic), half_len * 2))
 end
 

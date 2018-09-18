@@ -85,6 +85,16 @@ end
 end
 
 
+@inline function -(x::Integer, y::RRElem{T, M}) where T where M
+    convert(RRElem{T, M}, x) - y
+end
+
+
+-(x::RRElem{T, M}, y::T) where T where M = x - convert(RRElem{T, M}, y)
+-(x::T, y::RRElem{T, M}) where T where M = convert(RRElem{T, M}, x) - y
+
+
+
 @inline function -(x::RRElem{T, M}) where T where M
     # TODO: can be optimized
     zero(RRElem{T, M}) - x
@@ -97,6 +107,9 @@ end
     res = mulmod(xt, yt, M)
     RRElem(res, M)
 end
+
+*(x::RRElem{T, M}, y::Integer) where T where M = x * convert(RRElem{T, M}, y)
+*(x::Integer, y::RRElem{T, M}) where T where M = y * x
 
 
 @inline function *(x::RRElem{T, M}, y::RRElem{T, M}) where T where M

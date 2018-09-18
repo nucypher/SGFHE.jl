@@ -47,6 +47,11 @@ function *(p1::Polynomial{T}, p2::Integer) where T
     Polynomial(p1.coeffs .* convert(T, p2), p1.cyclic)
 end
 
+function *(p1::Polynomial{T}, p2::V) where T where V
+    Polynomial(p1.coeffs .* convert(T, p2), p1.cyclic)
+end
+
+
 function *(p1::Integer, p2::Polynomial)
     p2 * p1
 end

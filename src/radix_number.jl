@@ -183,6 +183,11 @@ end
 end
 
 
+*(x::RadixNumber{N, T}, y::Integer) where N where T = x * convert(RadixNumber{N, T}, y)
+*(x::Integer, y::RadixNumber{N, T}) where N where T = y * x
+
+
+
 function isodd(x::RadixNumber{N, T}) where N where T
     isodd(x.value[1])
 end
@@ -369,6 +374,12 @@ function divrem(x::RadixNumber{N, T}, y::RadixNumber{N, T}) where N where T
 
     (q, x)
 end
+
+
+# Required for broadcasting
+Base.length(x::RadixNumber{N, T}) where N where T = 1
+Base.iterate(x::RadixNumber{N, T}) where N where T = (x, nothing)
+Base.iterate(x::RadixNumber{N, T}, state) where N where T = nothing
 
 
 #=

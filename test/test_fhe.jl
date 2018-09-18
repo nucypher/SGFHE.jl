@@ -5,7 +5,8 @@ using BenchmarkTools
 using Random
 using SGFHE:
     Params, encrypt_private, encrypt_public, decrypt, PrivateKey, PublicKey,
-    flatten_deterministic, flatten, RRElem, RRElemMontgomery, RadixNumber
+    flatten_deterministic, flatten, RRElem, RRElemMontgomery, RadixNumber, polynomial_large,
+    RLWE, decompose
 
 
 function test_private()
@@ -163,34 +164,32 @@ function test_flatten_performance()
 end
 
 
-
 function test_flatten()
-    for l in 3:4
-        for B in 3:4
-            q = B^l
-            for a in 0:q-1
-                decomp = flatten(a, B, l, q)
-                restore = mod(sum(decomp .* B.^(0:l-1)), q)
-                @assert all(d .>= q-2*B || d <= 2*B for d in decomp)
-                #@assert all(decomp .>= -2*B) && all(decomp .<= 2*B)
-                @assert restore == a
+    for l in (3, 4)
+        for B in (3, 4)
+            for q in (B^l, B^l - 3)
+
+                modulus = UInt16(q)
+                tp = RRElem{UInt16, modulus}
+
+                lim_lo = convert(tp, q - 2 * B)
+                lim_hi = convert(tp, 2 * B)
+
+                B_rr = convert(tp, B)
+                for a in 0:q-1
+
+                    a_rr = convert(tp, a)
+
+                    decomp_rr = flatten(a_rr, B_rr, l)
+                    @assert eltype(decomp_rr) == tp
+
+                    restore_rr = sum(decomp_rr .* B_rr.^(0:l-1))
+
+                    @assert all(d >= lim_hi || d <= lim_lo for d in decomp_rr)
+                    @assert restore_rr == a_rr
+                end
             end
         end
-    end
-
-    p = Params(512)
-    l = 2
-    B = p.B
-    q = B^l
-
-    for i in 1:10000
-        a = rand(Int128(0):Int128(q-1))
-        decomp = flatten(a, B, l, q)
-        restore = mod(sum(decomp .* B.^(0:l-1)), q)
-        # TODO: change the range when switched to nonnegative numbers
-        @assert all(d .>= q-2*B || d <= 2*B for d in decomp)
-        #@assert all(decomp .>= -2*B) && all(decomp .<= 2*B)
-        @assert restore == a
     end
 end
 
@@ -201,18 +200,21 @@ function test_decompose()
     B = p.B
     l = 2
 
-    q = B^l
-    a = polynomial(rand(Int128, p.n), q)
-    b = polynomial(rand(Int128, p.n), q)
-    u = decompose(RLWE(a, b), B, l)
+    q = B^l - one(typeof(B))
+    a = polynomial_large(rand(Int128, p.n), q)
+    b = polynomial_large(rand(Int128, p.n), q)
 
-    # TODO: change the range when switched to nonnegative numbers
-    @assert all(all((x.coeffs .<= 2 * B) .| (x.coeffs .>= x.modulus - 2 * B)) for x in u)
+    B_rr = convert(RRElem{RadixNumber{2, UInt64}, q}, B)
+    B_m = convert(RRElemMontgomery{RadixNumber{2, UInt64}, q}, B_rr)
+    u = decompose(a, b, B_m, l)
 
-    B_powers = B.^(0:l-1)
+    for x in u
+        coeffs_rr = convert.(RRElem{RadixNumber{2, UInt64}, q}, x.coeffs)
+        @assert all(c <= 2 * B_rr || c >= q - 2 * B_rr for c in coeffs_rr)
+    end
 
-    a_restored = sum(u[1:l] .* B_powers)
-    b_restored = sum(u[l+1:end] .* B_powers)
+    a_restored = sum(u[1:l] .* B_m.^(0:l-1))
+    b_restored = sum(u[l+1:end] .* B_m.^(0:l-1))
 
     @assert a == a_restored
     @assert b == b_restored

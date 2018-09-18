@@ -19,7 +19,7 @@ struct Params
     Q :: RadixNumber{2, UInt64}
     t :: Int
     m :: Int
-    B :: UInt64
+    B :: RadixNumber{2, UInt64}
     Dr :: Int
     Dq :: Int
     DQ_tilde :: RadixNumber{2, UInt64}
@@ -61,7 +61,8 @@ struct Params
 
         new(
             n, UInt64(r), UInt64(q),
-            convert(RadixNumber{2, UInt64}, Q), t, m, UInt64(B), UInt64(Dr), UInt64(Dq),
+            convert(RadixNumber{2, UInt64}, Q), t, m,
+            convert(RadixNumber{2, UInt64}, B), UInt64(Dr), UInt64(Dq),
             convert(RadixNumber{2, UInt64}, DQ_tilde))
     end
 
@@ -317,11 +318,11 @@ function flatten_deterministic(a::T, B::T, l::Integer) where T <: AbstractRRElem
 end
 
 
-function flatten(a, B, l, q)
-    if mod(B, 2) == 0
-        xmax = 3 * div(B, 2)
+function flatten(a::T, B::T, l::Integer) where T <: AbstractRRElem
+    if isodd(B)
+        xmax = div(B-1, 2) * convert(T, 3)
     else
-        xmax = 3 * div(B-1, 2)
+        xmax = div(B, 2) * convert(T, 3)
     end
 
     #x = rand(-xmax:xmax, l)
@@ -332,22 +333,19 @@ function flatten(a, B, l, q)
 end
 
 
-function flatten_poly(a::Polynomial, B, l)
-    q = a.modulus
-    @assert q == B^l # flatten() requires this
-
-    decomp = flatten.(a.coeffs, B, l, q)
+function flatten_poly(a::Polynomial{T}, B::T, l::Integer) where T <: AbstractRRElem
+    decomp = flatten_deterministic.(a.coeffs, B, l)
     joined = cat(decomp..., dims=2)
-    [polynomial(joined[i,:], q) for i in 1:l]
+    [Polynomial(joined[i,:], a.cyclic) for i in 1:l]
 end
 
 
 """
 "triangle G" operator in the paper
 """
-function decompose(rlwe::RLWE, B, l)
-    a_decomp = flatten_poly(rlwe.a, B, l)
-    b_decomp = flatten_poly(rlwe.b, B, l)
+function decompose(a::Polynomial{T}, b::Polynomial{T}, B::T, l) where T <: AbstractRRElem
+    a_decomp = flatten_poly(a, B, l)
+    b_decomp = flatten_poly(b, B, l)
     [a_decomp; b_decomp]
 end
 
@@ -355,8 +353,8 @@ end
 """
 "circle with a dot" operator in the paper
 """
-function external_product(rlwe::RLWE, A::Array{Polynomial, 2}, B, l)
-    u = decompose(rlwe, B, l)
+function external_product(a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2}, B::T, l) where T
+    u = decompose(a, b, B, l)
 
     a_res = sum(u .* A[:,1])
     b_res = sum(u .* A[:,2])

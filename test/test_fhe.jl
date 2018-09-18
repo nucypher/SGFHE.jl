@@ -6,7 +6,7 @@ using Random
 using SGFHE:
     Params, encrypt_private, encrypt_public, decrypt, PrivateKey, PublicKey,
     flatten_deterministic, flatten, RRElem, RRElemMontgomery, RadixNumber, polynomial_large,
-    decompose, external_product
+    decompose, external_product, extract_lwes, decrypt_lwe
 
 
 function test_private()

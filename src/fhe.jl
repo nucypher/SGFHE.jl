@@ -135,24 +135,19 @@ struct BootstrapKey
 end
 
 
-struct LWE
-    a :: Array{BigInt, 1}
-    b :: BigInt
-    modulus :: Int
-
-    LWE(a, b, modulus) = new(mod.(a, modulus), mod(b, modulus), modulus)
+struct LWE{T <: AbstractRRElem}
+    a :: Array{T, 1}
+    b :: T
 end
 
 
 function +(l1::LWE, l2::LWE)
-    @assert l1.modulus == l2.modulus
-    LWE(mod.(l1.a .+ l2.a, l1.modulus), mod(l1.b + l2.b, l1.modulus), l1.modulus)
+    LWE(l1.a .+ l2.a, l1.b + l2.b)
 end
 
 
 function -(l1::LWE, l2::LWE)
-    @assert l1.modulus == l2.modulus
-    LWE(mod.(l1.a .- l2.a, l1.modulus), mod(l1.b - l2.b, l1.modulus), l1.modulus)
+    LWE(l1.a .- l2.a, l1.b - l2.b)
 end
 
 
@@ -167,14 +162,14 @@ function extract(a::Polynomial, i::Integer, n::Integer)
     if i <= n
         [a.coeffs[i:-1:1]; -a.coeffs[end:-1:end-(n-i-1)]]
     else
-        # TODO: this case is not considered in the paper, trying to guess the correct behavior
+        # TODO: this case is not considered in the paper, behavior according to S. Gao
         a.coeffs[i:-1:i-n+1]
     end
 end
 
 
 function extract_lwe(rlwe::RLWE, i::Integer, n::Integer)
-    LWE(extract(rlwe.a, i, n), rlwe.b.coeffs[i], rlwe.a.modulus)
+    LWE(extract(rlwe.a, i, n), rlwe.b.coeffs[i])
 end
 
 
@@ -290,10 +285,10 @@ end
 
 
 function decrypt_lwe(key::PrivateKey, lwe::LWE)
-    b1 = mod(lwe.b - sum(lwe.a .* key.key.coeffs), key.params.r)
+    b1 = lwe.b - sum(lwe.a .* key.key.coeffs)
 
     # TODO: for some reason the snapping here requires the Dr/4 == r/16 shift.
-    convert(Bool, div(mod(b1 + key.params.Dr / 2, key.params.r), key.params.Dr))
+    convert(Bool, div(b1 + key.params.Dr ÷ 2, key.params.Dr))
 end
 
 

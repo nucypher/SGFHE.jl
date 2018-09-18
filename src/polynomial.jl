@@ -65,25 +65,11 @@ function +(p1::Polynomial{T}, p2::Polynomial{T}) where T
     Polynomial(p1.coeffs .+ p2.coeffs, p1.cyclic)
 end
 
-
-#=
-TODO: these should actually work by only adding the scalar
-      to the first coefficient, not to all of them
-
 function +(p1::Polynomial{T}, p2::T) where T
-    Polynomial(p1.coeffs .+ p2, p1.cyclic)
+    coeffs = copy(p1.coeffs)
+    coeffs[1] += p2
+    Polynomial(coeffs, p1.cyclic)
 end
-
-
-function +(p1::Polynomial{T}, p2::Integer) where T
-    Polynomial(p1.coeffs .+ convert(T, p2), p1.cyclic)
-end
-
-
-function +(p1::Integer, p2::Polynomial{T}) where T
-    p2 + p1
-end
-=#
 
 
 function -(p1::Polynomial{T}, p2::Polynomial{T}) where T

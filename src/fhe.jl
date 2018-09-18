@@ -355,10 +355,9 @@ end
 """
 function external_product(a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2}, B::T, l) where T
     u = decompose(a, b, B, l)
-
     a_res = sum(u .* A[:,1])
     b_res = sum(u .* A[:,2])
-    RLWE(a_res, b_res)
+    a_res, b_res
 end
 
 

@@ -6,7 +6,7 @@ using Random
 using SGFHE:
     Params, encrypt_private, encrypt_public, decrypt, PrivateKey, PublicKey,
     flatten_deterministic, flatten, RRElem, RRElemMontgomery, RadixNumber, polynomial_large,
-    RLWE, decompose
+    decompose, external_product
 
 
 function test_private()
@@ -227,20 +227,24 @@ function test_external_product()
     B = p.B
     l = 2
 
-    q = B^l
-    a = polynomial(rand(Int128, p.n), q)
-    b = polynomial(rand(Int128, p.n), q)
-    u = decompose(RLWE(a, b), B, l)
+    q = B^l - one(typeof(B))
+    a = polynomial_large(rand(Int128, p.n), q)
+    b = polynomial_large(rand(Int128, p.n), q)
 
-    B_powers = B.^(0:l-1)
+    cc(x) = convert(
+        RRElemMontgomery{RadixNumber{2, UInt64}, q},
+        convert(RRElem{RadixNumber{2, UInt64}, q}, x))
 
-    pz = polynomial(zeros(p.n), q)
-    G = [pz pz; pz pz; pz pz; pz pz] + [1 0; B 0; 0 1; 0 B]
+    B_m = cc(B)
+    u = decompose(a, b, B_m, l)
 
-    rlwe = external_product(RLWE(a, b), G, B, l)
+    pz = polynomial_large(zeros(Int, p.n), q)
+    G = ([pz pz; pz pz; pz pz; pz pz] .+ cc.([1 0; B 0; 0 1; 0 B]))
 
-    @assert a == rlwe.a
-    @assert b == rlwe.b
+    a_restored, b_restored = external_product(a, b, G, B_m, l)
+
+    @assert a == a_restored
+    @assert b == b_restored
 end
 
 

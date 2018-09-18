@@ -10,15 +10,9 @@ function test_basics()
     T = RadixNumber{2, UInt8}
     modulus = T(177)
     x = RRElem(T(11), modulus)
-    println(x)
-    xm = convert(RRElemMontgomery{T, modulus}, x)
-    println(xm)
 
     # Montgomery form is invariant wrt negation
-    println(-xm)
-    println(convert(typeof(xm), -x))
-
-    @assert -xm == convert(typeof(xm), -x)
+    @assert -RRElemMontgomery(x) == RRElemMontgomery(-x)
 end
 
 
@@ -35,8 +29,8 @@ function test_performance()
     x_rr = RRElem(x_rn, m_rn)
     y_rr = RRElem(y_rn, m_rn)
 
-    x_rrm = convert(RRElemMontgomery{T, m_rn}, x_rr)
-    y_rrm = convert(RRElemMontgomery{T, m_rn}, y_rr)
+    x_rrm = RRElemMontgomery{T, m_rn}(x_rr)
+    y_rrm = RRElemMontgomery{T, m_rn}(y_rr)
 
     println("Tuples")
     x_t = x_rn.value
@@ -53,5 +47,5 @@ function test_performance()
 end
 
 
-#test_basics()
+test_basics()
 test_performance()

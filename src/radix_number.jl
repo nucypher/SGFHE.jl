@@ -3,13 +3,23 @@ import Base:
     convert, show, zero, setindex, getindex, length, div, rem, divrem, isodd, one
 
 
-struct RadixNumber{N, T <: Unsigned}
+struct RadixNumber{N, T <: Unsigned} <: Unsigned
     value :: NTuple{N, T}
 
     RadixNumber(x::NTuple{N, T}) where N where T = new{N, T}(x)
-    RadixNumber{N, T}(x::Integer) where N where T = convert(RadixNumber{N, T}, x)
+
+    function RadixNumber{N, T}(x::Integer) where N where T
+        res = zero(RadixNumber{N, T})
+        for i in 1:N
+            res = setindex(res, T(x & typemax(T)), i)
+            x >>= bitsize(T)
+        end
+        new{N, T}(res.value)
+    end
 end
 
+
+@inline convert(::Type{RadixNumber{N, T}}, x::RadixNumber{N, T}) where N where T = x
 
 @inline function convert(::Type{V}, x::RadixNumber{N, T}) where V <: Integer where N where T
     res = zero(V)
@@ -20,21 +30,9 @@ end
 end
 
 
-# To resolve ambiguity
-convert(::Type{RadixNumber{N, T}}, x::RadixNumber{N, T}) where N where T = x
-
-
-@inline function convert(::Type{RadixNumber{N, T}}, x::Integer) where N where T
-    res = zero(RadixNumber{N, T})
-    for i in 1:N
-        res = setindex(res, T(x & typemax(T)), i)
-        x >>= bitsize(T)
-    end
-    res
-end
-
-
-show(io::IO, x::RadixNumber{N, T}) where N where T = print(io, "{$(x.value)}")
+# Because RadixNumber <: Unsigned, show() will be bypassed sometimes in favor of string()
+Base.string(x::RadixNumber{N, T}) where N where T = "{" * string(x.value) * "}"
+show(io::IO, x::RadixNumber{N, T}) where N where T = print(io, string(x))
 
 
 @inline @generated function zero(::Type{RadixNumber{N, T}}) where N where T

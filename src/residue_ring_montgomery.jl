@@ -1,6 +1,23 @@
+struct _NoConversion
+end
 
-struct RRElemMontgomery{M, T} <: AbstractRRElem
-    value :: RRElem{M, T}
+const _no_conversion = _NoConversion()
+
+
+struct RRElemMontgomery{T, M} <: AbstractRRElem
+    value :: RRElem{T, M}
+
+    @inline function RRElemMontgomery(x::RRElem{T, M}, ::_NoConversion) where T where M
+        new{T, M}(x)
+    end
+
+    @inline function RRElemMontgomery(x::RRElem{T, M}) where T where M
+        new{T, M}(RRElem(to_montgomery(x.value, M), M))
+    end
+
+    @inline function RRElemMontgomery{T, M}(x::Integer) where T where M
+        RRElemMontgomery(RRElem{T, M}(x))
+    end
 end
 
 
@@ -15,18 +32,11 @@ function convert(::Type{RRElem{T, M}}, x::RRElemMontgomery{T, M}) where T where 
     RRElem(res, M)
 end
 
+convert(::Type{RRElemMontgomery{T, M}}, x::RRElemMontgomery{T, M}) where T where M = x
 
 function convert(::Type{V}, x::RRElemMontgomery{T, M}) where V <: Integer where T where M
     convert(V, convert(RRElem{T, M}, x))
 end
-
-
-convert(::Type{RRElemMontgomery{T, M}}, x::RRElem{T, M}) where T where M =
-    RRElemMontgomery{T, M}(RRElem(to_montgomery(x.value, M), M))
-
-
-convert(::Type{RRElemMontgomery{T, M}}, x::V) where V <: Integer where T where M =
-    convert(RRElemMontgomery{T, M}, convert(RRElem{T, M}, x))
 
 
 # Required for broadcasting
@@ -35,27 +45,30 @@ Base.iterate(x::RRElemMontgomery{T, M}) where T where M = (x, nothing)
 Base.iterate(x::RRElemMontgomery{T, M}, state) where T where M = nothing
 
 
+Base.string(x::RRElemMontgomery{T, M}) where T where M = string(x.value) * "M"
+
 function show(io::IO, x::RRElemMontgomery{T, M}) where T where M
     show(io, x.value)
     print(io, "M")
 end
 
 
-zero(::Type{RRElemMontgomery{T, M}}) where T where M = RRElemMontgomery(zero(RRElem{T, M}))
+zero(::Type{RRElemMontgomery{T, M}}) where T where M =
+    RRElemMontgomery(zero(RRElem{T, M}), _no_conversion)
 
 
 @inline function +(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T where M
-    RRElemMontgomery(x.value + y.value)
+    RRElemMontgomery(x.value + y.value, _no_conversion)
 end
 
 
 @inline function -(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T where M
-    RRElemMontgomery(x.value - y.value)
+    RRElemMontgomery(x.value - y.value, _no_conversion)
 end
 
 
 @inline function -(x::RRElemMontgomery{T, M}, y::Integer) where T where M
-    x - convert(RRElemMontgomery{T, M}, y)
+    x - RRElemMontgomery{T, M}(y)
 end
 
 
@@ -70,7 +83,7 @@ end
     xt = x.value.value
     yt = y.value.value
     res = mulmod_montgomery_ntuple(xt, yt, M, montgomery_coeff(RRElem{T, M}))
-    RRElemMontgomery(RRElem(res, M))
+    RRElemMontgomery(RRElem(res, M), _no_conversion)
 end
 
 
@@ -81,13 +94,13 @@ end
 
 
 @generated function one(::Type{RRElemMontgomery{T, M}}) where T where M
-    res = convert(RRElemMontgomery{T, M}, one(RRElem{T, M}))
+    res = RRElemMontgomery(one(RRElem{T, M}))
     :( $res )
 end
 
 
 function div(x::RRElemMontgomery{T, M}, y::Integer) where T where M
-    convert(RRElemMontgomery{T, M}, div(convert(RRElem{T, M}, x), y))
+    RRElemMontgomery(div(convert(RRElem{T, M}, x), y))
 end
 
 
@@ -96,5 +109,5 @@ function divrem(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T wh
     xr = convert(RRElem{T, M}, x)
     yr = convert(RRElem{T, M}, y)
     d, r = divrem(xr, yr)
-    convert(RRElemMontgomery{T, M}, d), convert(RRElemMontgomery{T, M}, r)
+    RRElemMontgomery(d), RRElemMontgomery(r)
 end

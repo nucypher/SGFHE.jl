@@ -20,8 +20,8 @@ struct Params
     t :: Int
     m :: Int
     B :: RadixNumber{2, UInt64}
-    Dr :: Int
-    Dq :: Int
+    Dr :: UInt64
+    Dq :: UInt64
     DQ_tilde :: RadixNumber{2, UInt64}
 
     function Params(n::Int)
@@ -44,9 +44,7 @@ struct Params
             Qmax = 1225 * r^4 * n^2
 
             # 1220 r^4 n^2 <= Q <= 1225 r^4 n^2
-            # TODO: Setting Q = B^2 to make work easier for flatten_deterministic()
-            #       When it is switched to non-negative numbers, this can be relaxed.
-            Q = Qmax
+            Q = Qmax - 1 # need an odd modulus for Montgomery reduction to work
         end
 
         @assert mod(r, 8) == 0
@@ -102,7 +100,7 @@ struct PublicKey
 
         # More precisely, we need e_max < Dq / (41n)
         e_max = cld(params.Dq, 41 * params.n) - 1
-        e = polynomial_small(rand(-e_max:e_max, params.n), params.q)
+        e = polynomial_small(rand(0:2*e_max, params.n), params.q) - e_max
         k1 = k0 * with_modulus(sk.key, params.q) + e
 
         new(params, k0, k1)
@@ -116,15 +114,32 @@ struct BootstrapKey
     key :: Array{Array{Polynomial, 2}, 1}
 
     function BootstrapKey(params::Params, sk::PrivateKey)
-        ext_key = with_length(with_modulus(sk.key, params.Q), params.m)
-        G = [1 0; params.B 0; 0 1; 0 params.B]
-        bkey = Array{Array{Polynomial, 2}, 1}(undef, params.n)
+
+        # TODO: set the polynomial element type in a single place
+        ptp = RRElemMontgomery{RadixNumber{2, UInt64}, params.Q}
+
+        # TODO: generalize and move to polynomial.jl?
+        key_coeffs = convert.(BigInt, sk.key.coeffs)
+
+        ext_key = with_length(polynomial_large(key_coeffs, params.Q), params.m)
+
+        v0 = zero(ptp)
+        v1 = one(ptp)
+        B_m = convert(ptp, params.B)
+
+        G = [v1 v0; B_m v0; v0 v1; v0 B_m]
+        bkey = Array{Array{Polynomial{ptp}, 2}, 1}(undef, params.n)
         for i in 1:params.n
-            aj = [polynomial(rand(0:params.Q-1, params.m), params.Q) for j in 1:4]
-            ej = [polynomial(rand(-params.n:params.n, params.m), params.Q) for j in 1:4]
+
+            # TODO: add rand() support for RadixInteger
+            rand_a = rand(BigInt(0):convert(BigInt, params.Q)-1, params.m)
+
+            aj = [polynomial_large(rand_a, params.Q) for j in 1:4]
+            ej = [polynomial_large(rand(-params.n:params.n, params.m), params.Q) for j in 1:4]
+
             bj = [aj[j] * ext_key + ej[j] for j in 1:4]
 
-            C = [aj[1] bj[1]; aj[2] bj[2]; aj[3] bj[3]; aj[4] bj[4]] .+ sk.key.coeffs[i] * G
+            C = [aj[1] bj[1]; aj[2] bj[2]; aj[3] bj[3]; aj[4] bj[4]] .+ ext_key.coeffs[i] * G
 
             bkey[i] = C
         end
@@ -221,7 +236,7 @@ function encrypt_private(key::PrivateKey, message::Array{Bool, 1})
     a = polynomial_small(packbits(BigInt, a_bits), params.r)
 
     # TODO: Why 1/8? According to p.6 in the paper, even 1/2 should work.
-    w_range = div(params.Dr, 8)
+    w_range = signed(div(params.Dr, 8))
 
     w = polynomial_small(rand(-w_range:w_range, length(message)), params.r)
 
@@ -245,10 +260,10 @@ function encrypt_public(key::PublicKey, message:: Array{Bool, 1})
 
     u = polynomial_small(rand(-1:1, params.n), params.q)
 
-    w1_max = div(params.Dq, 41 * params.n)
+    w1_max = signed(div(params.Dq, 41 * params.n))
     w1 = polynomial_small(rand(-w1_max:w1_max, params.n), params.q)
 
-    w2_max = div(params.Dq, 82)
+    w2_max = signed(div(params.Dq, 82))
     w2 = polynomial_small(rand(-w2_max:w2_max, params.n), params.q)
 
     message_poly = polynomial_small(message, params.q)
@@ -294,10 +309,11 @@ end
 
 function flatten_deterministic(a::T, B::T, l::Integer) where T <: AbstractRRElem
     # range offset
+    two = T(2)
     if isodd(B)
-        s = ((B - 1) ÷ 2)
+        s = ((B - 1) ÷ two)
     else
-        s = (B ÷ 2 - 1)
+        s = (B ÷ two - 1)
     end
 
     # decomposition offset

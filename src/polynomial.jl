@@ -7,7 +7,6 @@ struct Polynomial{T}
     cyclic :: Int
 
     function Polynomial(::Type{T}, coeffs::AbstractArray{V, 1}, cyclic) where T where V <: Integer
-        # TODO: may be faster to do modulus only where it is necessary
         coeffs_rm = convert.(T, coeffs)
         new{T}(coeffs_rm, cyclic)
     end
@@ -77,15 +76,27 @@ function -(p1::Polynomial{T}, p2::Polynomial{T}) where T
 end
 
 
+function -(p1::Polynomial{T}, p2::Unsigned) where T
+    Polynomial(p1.coeffs .- T(p2), p1.cyclic)
+end
+
+
 -(p1::Polynomial, p2::ZeroPolynomial) = p1
 
 
-with_modulus(p::Polynomial{T}, new_modulus::Integer) where T =
+with_modulus(p::Polynomial{T}, new_modulus::V) where T where V =
     # TODO: technically, we need to only convert the modulus from Integer once
     Polynomial(with_modulus.(p.coeffs, new_modulus), p.cyclic)
 
 
-function modulus_reduction(p::Polynomial{T}, new_modulus::Integer) where T
+function with_length(p::Polynomial{T}, new_length::Integer) where T
+    @assert new_length >= length(p)
+    Polynomial([p.coeffs; zeros(eltype(p.coeffs), new_length - length(p))], p.cyclic)
+end
+
+
+
+function modulus_reduction(p::Polynomial{T}, new_modulus::Unsigned) where T
     # TODO: technically, we need to only convert the modulus from Integer once
     Polynomial(modulus_reduction.(p.coeffs, new_modulus), p.cyclic)
 end
@@ -99,12 +110,6 @@ end
 =#
 
 #=
-
-
-function with_length(p::Polynomial{T}, new_length::Int) where M
-    @assert new_length >= length(p)
-    Polynomial([p.coeffs; zeros(eltype(p.coeffs), new_length - length(p))], p.cyclic)
-end
 
 
 compatible(p1::Polynomial{M}, p2::Polynomial{M}) where M = (

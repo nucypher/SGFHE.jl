@@ -1,11 +1,11 @@
-abstract type AbstractRRElem end
+abstract type AbstractRRElem <: Unsigned end
 
 
 struct RRElem{T, M} <: AbstractRRElem
     value :: T
 
+    # TODO: or is it better to have `function RRElem{T, M}(x::T)`?
     @inline function RRElem(x::T, m::T) where T
-        #println("T=$T, M=$m")
         new{T, m}(x)
     end
 
@@ -14,36 +14,16 @@ struct RRElem{T, M} <: AbstractRRElem
     # So it has to be performed directly.
     @inline function RRElem{T, M}(x::Integer) where T where M
         # TODO: write an optimized version of this
+        # TODO: if `x` is already a RadixNumber, no need to convert to BigInt
         # @assert typeof(M) == T
         m_i = convert(BigInt, M)
-        mod_x = T(mod(x, m_i))
-        new{T, M}(mod_x)
+        x_i = convert(BigInt, x)
+        new{T, M}(mod(x_i, m_i))
     end
 end
 
 
-# TODO: organize conversions properly. Perhaps some are not needed.
-
-function convert(::Type{RRElem{T, M}}, x::T) where T where M
-    # TODO: write a mod() function for NTuples
-    m_i = convert(BigInt, M)
-    x_i = convert(BigInt, x)
-    mod_x = convert(T, mod(x_i, m_i))
-    RRElem(mod_x, M)
-end
-
-
-function convert(::Type{RRElem{T, M}}, x::V) where T where M where V <: Integer
-    # TODO: write a mod() function for NTuples
-    # TODO: picking up this conversion case to properly process negative numbers.
-    # if it is converted to RadixNumber first, and reduced by modulo next,
-    # the result will be wrong.
-    m_i = convert(BigInt, M)
-    x_i = convert(BigInt, x)
-    mod_x = convert(T, mod(x_i, m_i))
-    RRElem(mod_x, M)
-end
-
+convert(::Type{RRElem{T, M}}, x::RRElem{T, M}) where T where M = x
 
 function convert(::Type{V}, x::RRElem{T, M}) where V <: Integer where T where M
     convert(V, x.value)
@@ -56,10 +36,8 @@ Base.iterate(x::RRElem{T, M}) where T where M = (x, nothing)
 Base.iterate(x::RRElem{T, M}, state) where T where M = nothing
 
 
-function show(io::IO, x::RRElem{T, M}) where T where M
-    show(io, x.value)
-    print(io, "RR")
-end
+Base.string(x::RRElem{T, M}) where T where M = string(x.value) * "RR"
+show(io::IO, x::RRElem{T, M}) where T where M = print(io, string(x))
 
 
 zero(::Type{RRElem{T, M}}) where T where M = RRElem(zero(T), M)
@@ -70,7 +48,7 @@ zero(::Type{RRElem{T, M}}) where T where M = RRElem(zero(T), M)
 end
 
 
-@inline function +(x::RRElem{T, M}, y::Integer) where T where M
+@inline function +(x::RRElem{T, M}, y::Unsigned) where T where M
     x + convert(RRElem{T, M}, y)
 end
 
@@ -108,10 +86,11 @@ end
     RRElem(res, M)
 end
 
-*(x::RRElem{T, M}, y::Integer) where T where M = x * convert(RRElem{T, M}, y)
-*(x::Integer, y::RRElem{T, M}) where T where M = y * x
+*(x::RRElem{T, M}, y::Unsigned) where T where M = x * RRElem{T, M}(y)
+*(x::Unsigned, y::RRElem{T, M}) where T where M = y * x
 
 
+#=
 @inline function *(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
     # TODO: currently very slow, for testing purposes only
     xi = convert(BigInt, x)
@@ -120,15 +99,16 @@ end
     res = mod(xi * yi, mi)
     RRElem(convert(T, res), M)
 end
+=#
 
 
-@inline function with_modulus(x::RRElem{T, M}, new_modulus::Integer) where T where M
+@inline function with_modulus(x::RRElem{T, M}, new_modulus::V) where T where M where V
     nm = convert(T, new_modulus)
     convert(RRElem{T, nm}, x)
 end
 
 
-@inline function modulus_reduction(x::RRElem{T, M}, new_modulus::Integer) where T where M
+@inline function modulus_reduction(x::RRElem{T, M}, new_modulus::Unsigned) where T where M
     nm = convert(T, new_modulus)
     # TODO: optimize
     xi = convert(BigInt, x)
@@ -136,12 +116,6 @@ end
 
     # TODO: make it a purely integer algorithm
     convert(RRElem{T, nm}, round(BigInt, xi * new_modulus / mi))
-end
-
-
-@inline function convert(::Type{RRElem{T, M}}, x::RRElem{T, M}) where T where M
-    # TODO: this shouldn't actually be called anywhere, but it seems to be.
-    x
 end
 
 
@@ -165,7 +139,7 @@ function div(x::RRElem{T, M}, y::RRElem{T, M}) where T where M
 end
 
 
-function div(x::RRElem{T, M}, y::Integer) where T where M
+function div(x::RRElem{T, M}, y::Unsigned) where T where M
     div(x, convert(RRElem{T, M}, y))
 end
 
@@ -173,7 +147,7 @@ end
 one(::Type{RRElem{T, M}}) where T where M = RRElem(one(T), M)
 
 
-function ^(x::T, y::Integer) where T <: AbstractRRElem
+function ^(x::T, y::Unsigned) where T <: AbstractRRElem
     # TODO: optimize
     res = one(T)
     @assert y >= 0

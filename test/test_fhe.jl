@@ -6,7 +6,7 @@ using Random
 using SGFHE:
     Params, encrypt_private, encrypt_public, decrypt, PrivateKey, PublicKey,
     flatten_deterministic, flatten, RRElem, RRElemMontgomery, RadixNumber, polynomial_large,
-    decompose, external_product, extract_lwes, decrypt_lwe
+    decompose, external_product, extract_lwes, decrypt_lwe, BootstrapKey
 
 
 function test_private()
@@ -91,34 +91,32 @@ function test_flatten_montgomery()
     mtp = RRElemMontgomery{rtp, modulus_r}
 
     B_i = 2^20-1
-    B_rr = convert(rrtp, B_i)
-    B_m = convert(mtp, B_i)
+    B_rr = rrtp(B_i)
+    B_m = mtp(B_i)
 
     l = 2
-    s_rr = (B_rr - 1) ÷ 2
-
-    lim_lo = -s_rr
-    lim_hi = B_rr - s_rr - 1
+    s = (B_i - 1) ÷ 2
 
     for i in 1:1000
 
         a_i = rand(UInt32) % modulus_i
 
-        a_rr = convert(rrtp, a_i)
-        a_m = convert(mtp, a_i)
+        a_rr = rrtp(a_i)
+        a_m = mtp(a_i)
 
         decomp_m = flatten_deterministic(a_m, B_m, l)
         @assert eltype(decomp_m) == mtp
 
-        restore = sum(decomp_m .* B_m.^(0:l-1))
-        @assert restore == a_m
+        restore_m = sum(decomp_m .* B_m.^(0:l-1))
+        @assert restore_m == a_m
 
-        decomp_rr = convert.(rrtp, decomp_m)
-        restore_rr = sum(decomp_rr .* B_rr.^(0:l-1))
-        @assert restore_rr == a_rr
+        decomp = convert.(BigInt, decomp_m)
+        restore = mod(sum(decomp .* B_i.^(0:l-1)), modulus_i)
 
-        for d in decomp_rr
-            @assert d >= lim_hi || d <= lim_lo
+        @assert restore == a_i
+
+        for d in decomp
+            @assert d >= B_i - s - 1 || d <= s
         end
     end
 end
@@ -198,19 +196,21 @@ function test_decompose()
     p = Params(64)
 
     B = p.B
+    B_bi = BigInt(B)
     l = 2
 
     q = B^l - one(typeof(B))
+    q_bi = BigInt(q)
     a = polynomial_large(rand(Int128, p.n), q)
     b = polynomial_large(rand(Int128, p.n), q)
 
-    B_rr = convert(RRElem{RadixNumber{2, UInt64}, q}, B)
-    B_m = convert(RRElemMontgomery{RadixNumber{2, UInt64}, q}, B_rr)
-    u = decompose(a, b, B_m, l)
+    B_rr = RRElem{RadixNumber{2, UInt64}, q}(B)
+    B_m = RRElemMontgomery{RadixNumber{2, UInt64}, q}(B)
 
+    u = decompose(a, b, B_m, l)
     for x in u
-        coeffs_rr = convert.(RRElem{RadixNumber{2, UInt64}, q}, x.coeffs)
-        @assert all(c <= 2 * B_rr || c >= q - 2 * B_rr for c in coeffs_rr)
+        coeffs = convert.(BigInt, x.coeffs)
+        @assert all(c <= 2 * B_bi || c >= q_bi - 2 * B_bi for c in coeffs)
     end
 
     a_restored = sum(u[1:l] .* B_m.^(0:l-1))
@@ -231,16 +231,11 @@ function test_external_product()
     a = polynomial_large(rand(Int128, p.n), q)
     b = polynomial_large(rand(Int128, p.n), q)
 
-    cc(x) = convert(
-        RRElemMontgomery{RadixNumber{2, UInt64}, q},
-        convert(RRElem{RadixNumber{2, UInt64}, q}, x))
+    cc(x) = RRElemMontgomery{RadixNumber{2, UInt64}, q}(x)
 
     B_m = cc(B)
-    u = decompose(a, b, B_m, l)
-
     pz = polynomial_large(zeros(Int, p.n), q)
     G = ([pz pz; pz pz; pz pz; pz pz] .+ cc.([1 0; B 0; 0 1; 0 B]))
-
     a_restored, b_restored = external_product(a, b, G, B_m, l)
 
     @assert a == a_restored

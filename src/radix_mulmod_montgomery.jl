@@ -6,6 +6,12 @@ function get_montgomery_coeff_ntuple(m::RadixNumber{N, T}) where N where T
     -T(invmod(BigInt(m.value[1]), BigInt(typemax(T)) + 1))
 end
 
+function get_montgomery_coeff_ntuple(m::T) where T <: Unsigned
+    # calculate -m^(-1) mod b, where b = typemax(T)+1
+    -T(invmod(BigInt(m), BigInt(typemax(T)) + 1))
+end
+
+
 
 # Addition of unsigned numbers with carry
 @inline function _addc(x::T, y::T) where T <: Unsigned
@@ -134,6 +140,15 @@ function to_montgomery(x::RadixNumber{N, T}, m::RadixNumber{N, T}) where N where
 end
 
 
+function to_montgomery(x::T, m::T) where T <: Unsigned
+    # TODO: find a way to do it without the BigInt conversion
+    xb = convert(BigInt, x)
+    mb = convert(BigInt, m)
+    R = BigInt(1) << bitsize(T)
+    T((xb * R) % mb)
+end
+
+
 @inline function _addto_ntuple(
         res::RadixNumber{N, T}, res_hi::T, v::RadixNumber{N, T}) where N where T
 
@@ -201,4 +216,9 @@ end
     else
         a
     end
+end
+
+
+@Base.propagate_inbounds function from_montgomery(x::T, m::T, m_prime::T) where T <: Unsigned
+    from_montgomery(RadixNumber((x,)), RadixNumber((m,)), m_prime).value[1]
 end

@@ -99,8 +99,23 @@ end
 end
 
 
-function div(x::RRElemMontgomery{T, M}, y::Integer) where T where M
-    RRElemMontgomery(div(convert(RRElem{T, M}, x), y))
+function div(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T where M
+    div(x, convert(RRElem{T, M}, y))
+end
+
+
+function div(x::RRElemMontgomery{T, M}, y::Unsigned) where T where M
+    # TODO: assumes that `y` fits into RRElem
+    x_rr = convert(RRElem{T, M}, x)
+    y_rr = convert(RRElem{T, M}, y)
+    RRElemMontgomery(div(x_rr, y_rr))
+end
+
+
+# Apparently we cannot just define a method for `y::Integer`, since there is a
+# `div(Unsigned, Union{...})` in Base, resulting in ambiguity.
+function div(x::RRElemMontgomery{T, M}, y::Union{Int128, Int16, Int32, Int64, Int8}) where T where M
+    y < 0 ? div(-x, unsigned(-y)) : div(x, unsigned(y))
 end
 
 

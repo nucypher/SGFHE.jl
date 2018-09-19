@@ -140,8 +140,21 @@ end
 
 
 function div(x::RRElem{T, M}, y::Unsigned) where T where M
+    # TODO: assumes that `y` fits into RRElem
     div(x, convert(RRElem{T, M}, y))
 end
+
+
+# Apparently we cannot just define a method for `y::Integer`, since there is a
+# `div(Unsigned, Union{...})` in Base, resulting in ambiguity.
+function div(x::RRElem{T, M}, y::Union{Int128, Int16, Int32, Int64, Int8}) where T where M
+    println("div integer")
+    y < 0 ? div(-x, unsigned(-y)) : div(x, unsigned(y))
+end
+
+
+Base.promote_type(::Type{RRElem{T, M}}, ::Type{<:Integer}) where T where M = RRElem{T, M}
+Base.promote_type(::Type{<:Integer}, ::Type{RRElem{T, M}}) where T where M = RRElem{T, M}
 
 
 one(::Type{RRElem{T, M}}) where T where M = RRElem(one(T), M)

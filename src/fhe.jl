@@ -6,8 +6,12 @@ function polynomial_small(coeffs, modulus::UInt64)
 end
 
 
-function polynomial_large(coeffs, modulus::RadixNumber{2, UInt64})
-    tp = RRElemMontgomery{RadixNumber{2, UInt64}, modulus}
+const large_tp = UInt128 # RadixNumber{2, UInt64}
+const large_rr_tp = RRElem
+
+
+function polynomial_large(coeffs, modulus::large_tp)
+    tp = large_rr_tp{large_tp, modulus}
     Polynomial(tp, coeffs, 1)
 end
 
@@ -16,13 +20,13 @@ struct Params
     n :: Int
     r :: UInt64
     q :: UInt64
-    Q :: RadixNumber{2, UInt64}
+    Q :: large_tp
     t :: Int
     m :: Int
-    B :: RadixNumber{2, UInt64}
+    B :: large_tp
     Dr :: UInt64
     Dq :: UInt64
-    DQ_tilde :: RadixNumber{2, UInt64}
+    DQ_tilde :: large_tp
 
     function Params(n::Int)
 
@@ -44,7 +48,7 @@ struct Params
             Qmax = 1225 * r^4 * n^2
 
             # 1220 r^4 n^2 <= Q <= 1225 r^4 n^2
-            Q = Qmax - 1 # need an odd modulus for Montgomery reduction to work
+            Q = Qmax # need an odd modulus for Montgomery reduction to work
         end
 
         @assert mod(r, 8) == 0
@@ -59,9 +63,9 @@ struct Params
 
         new(
             n, UInt64(r), UInt64(q),
-            convert(RadixNumber{2, UInt64}, Q), t, m,
-            convert(RadixNumber{2, UInt64}, B), UInt64(Dr), UInt64(Dq),
-            convert(RadixNumber{2, UInt64}, DQ_tilde))
+            convert(large_tp, Q), t, m,
+            convert(large_tp, B), UInt64(Dr), UInt64(Dq),
+            convert(large_tp, DQ_tilde))
     end
 
 end
@@ -116,7 +120,7 @@ struct BootstrapKey
     function BootstrapKey(params::Params, sk::PrivateKey)
 
         # TODO: set the polynomial element type in a single place
-        ptp = RRElemMontgomery{RadixNumber{2, UInt64}, params.Q}
+        ptp = large_rr_tp{large_tp, params.Q}
 
         # TODO: generalize and move to polynomial.jl?
         key_coeffs = convert.(BigInt, sk.key.coeffs)
@@ -125,7 +129,7 @@ struct BootstrapKey
 
         v0 = zero(ptp)
         v1 = one(ptp)
-        B_m = convert(ptp, params.B)
+        B_m = ptp(params.B)
 
         G = [v1 v0; B_m v0; v0 v1; v0 B_m]
         bkey = Array{Array{Polynomial{ptp}, 2}, 1}(undef, params.n)
@@ -134,11 +138,8 @@ struct BootstrapKey
             # TODO: add rand() support for RadixInteger
             aj = [polynomial_large(rand(BigInt(0):convert(BigInt, params.Q)-1, params.m), params.Q) for j in 1:4]
             ej = [polynomial_large(rand(-params.n:params.n, params.m), params.Q) for j in 1:4]
-
             bj = [aj[j] * ext_key + ej[j] for j in 1:4]
-
             C = [aj[1] bj[1]; aj[2] bj[2]; aj[3] bj[3]; aj[4] bj[4]] .+ ext_key.coeffs[i] * G
-
             bkey[i] = C
         end
 
@@ -374,39 +375,47 @@ function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
     params = bkey.params
     u = v1 + v2
 
-    # TODO: Dr == m / 2, so this can be calculated faster
-    t = initial_poly(-params.Dr:params.Dr, params.m, params.Q, 1)
+    # TODO: remove polynomial elem type hardcoding
+    ptp = large_rr_tp{large_tp, params.Q}
 
-    a = polynomial(zeros(params.m), params.Q)
-    b = shift(t, -u.b) * params.DQ_tilde
+    # TODO: Dr == m / 2, so this can be calculated faster
+    # In fact, it can be prepared in advance.
+    t = initial_poly(ptp, -Int(params.Dr):Int(params.Dr), params.m, 1)
+
+    a = polynomial_large(zeros(Int, params.m), params.Q)
+
+    # TODO: make sure u.b actually fits into Int
+    b = shift(t, -convert(Int, u.b)) * params.DQ_tilde
 
     # multiplication by (x^j - 1)
     mul(p, j) = shift(p, j) - p
 
-    rlwe = RLWE(a, b)
-    G = [1 0; params.B 0; 0 1; 0 params.B]
+    # TODO: same as in BootstrapKey(); extract into a function?
+    v0 = zero(ptp)
+    v1 = one(ptp)
+    B_m = ptp(params.B)
+    G = [v1 v0; B_m v0; v0 v1; v0 B_m]
 
     print("bootstrap: ")
     for k = 1:params.n
         print(k, " ")
-        rlwe = external_product(rlwe, mul.(bkey.key[k], u.a[k]) .+ G, params.B, 2)
+        # TODO: make sure u.a[k] fits into Int
+        a, b = external_product(a, b, mul.(bkey.key[k], convert(Int, u.a[k])) .+ G, B_m, 2)
     end
     println()
 
     a_and = LWE(
-        extract(rlwe.a, 3 * params.m ÷ 4, params.n),
-        params.DQ_tilde + rlwe.b.coeffs[3 * params.m ÷ 4],
-        params.Q)
+        extract(a, 3 * params.m ÷ 4, params.n),
+        ptp(params.DQ_tilde) + b.coeffs[3 * params.m ÷ 4])
     a_or = LWE(
-        -extract(rlwe.a, params.m ÷ 4, params.n),
-        params.DQ_tilde - rlwe.b.coeffs[params.m ÷ 4],
-        params.Q)
+        -extract(a, params.m ÷ 4, params.n),
+        ptp(params.DQ_tilde) - b.coeffs[params.m ÷ 4])
 
     a_xor = a_or - a_and
 
-    c_and = modulus_reduction(a_and, params.r)
-    c_or = modulus_reduction(a_or, params.r)
-    c_xor = modulus_reduction(a_xor, params.r)
+    c_and = modulus_reduction(to_rr(a_and), params.r)
+    c_or = modulus_reduction(to_rr(a_or), params.r)
+    c_xor = modulus_reduction(to_rr(a_xor), params.r)
 
     c_and, c_or, c_xor
 end
@@ -430,16 +439,30 @@ function shortened_external_product(a::Polynomial, b1::Polynomial, b2::Polynomia
 end
 
 
-function modulus_reduction(p::Polynomial, new_modulus)
-    polynomial(round.(p.coeffs * new_modulus / p.modulus), new_modulus)
+function modulus_reduction(p::Polynomial{T}, new_modulus::V) where T where V
+    polynomial_small(type_change.(V, modulus_reduction.(p.coeffs, new_modulus)))
+end
+
+
+function to_rr(x::large_rr_tp{T, M}) where T where M
+    convert(RRElem{T, M}, x)
+end
+
+function to_rr(x::LWE)
+    LWE(to_rr.(x.a), to_rr(x.b))
+end
+
+
+function big_to_small(x::RRElem{T, M}) where T where M
+    small_tp = UInt64
+    RRElem(convert(small_tp, x.value), convert(small_tp, M))
 end
 
 
 function modulus_reduction(lwe::LWE, new_modulus)
     LWE(
-        round.(lwe.a * new_modulus / lwe.modulus),
-        round(lwe.b * new_modulus / lwe.modulus),
-        new_modulus)
+        big_to_small.(modulus_reduction.(lwe.a, new_modulus)),
+        big_to_small(modulus_reduction(lwe.b, new_modulus)))
 end
 
 

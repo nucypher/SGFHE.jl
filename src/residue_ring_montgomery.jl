@@ -32,6 +32,11 @@ function convert(::Type{RRElem{T, M}}, x::RRElemMontgomery{T, M}) where T where 
     RRElem(res, M)
 end
 
+
+# TODO: this is used to prevent the convert(Integer, RadixNumber) to activate.
+# Is there a better way? Technically, this shouldn't be used at all - it's the constructor's job.
+convert(::Type{RRElemMontgomery{T, M}}, x::RadixNumber) where T where M = RRElemMontgomery{T, M}(x)
+
 convert(::Type{RRElemMontgomery{T, M}}, x::RRElemMontgomery{T, M}) where T where M = x
 
 function convert(::Type{V}, x::RRElemMontgomery{T, M}) where V <: Integer where T where M
@@ -125,4 +130,15 @@ function divrem(x::RRElemMontgomery{T, M}, y::RRElemMontgomery{T, M}) where T wh
     yr = convert(RRElem{T, M}, y)
     d, r = divrem(xr, yr)
     RRElemMontgomery(d), RRElemMontgomery(r)
+end
+
+
+@inline function modulus_reduction(x::RRElemMontgomery{T, M}, new_modulus::Unsigned) where T where M
+    nm = convert(T, new_modulus)
+    # TODO: optimize
+    xi = convert(BigInt, x)
+    mi = convert(BigInt, M)
+
+    # TODO: make it a purely integer algorithm
+    RRElemMontgomery{T, nm}(round(BigInt, xi * new_modulus / mi))
 end

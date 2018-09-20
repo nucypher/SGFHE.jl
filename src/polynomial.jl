@@ -135,16 +135,19 @@ end
 #function div(p1::Polynomial, p2::Integer)
 #    Polynomial(div.(p1.coeffs, p2), p1.modulus, p1.cyclic)
 #end
+=#
 
 
-function initial_poly(powers, len, modulus, cyclic)
-    coeffs = zeros(BigInt, len)
+# Creates a polynomial `sum(x^j for j in powers) mod x^len +/- 1`.
+# Powers can be negative, or greater than `len`, in which case they will be properly looped over.
+# TODO: may belong in fhe.jl
+function initial_poly(tp, powers, len, cyclic)
+    coeffs = zeros(tp, len)
     for i in powers
         coeffs[mod(i, len) + 1] += cyclic == 1 ? (mod(fld(i, len), 2) == 0 ? 1 : -1) : 1
     end
-    Polynomial(coeffs, modulus, cyclic)
+    Polynomial(coeffs, cyclic)
 end
-=#
 
 
 @Base.propagate_inbounds function shift(p::Polynomial{T}, shift::Integer) where T

@@ -132,9 +132,7 @@ struct BootstrapKey
         for i in 1:params.n
 
             # TODO: add rand() support for RadixInteger
-            rand_a = rand(BigInt(0):convert(BigInt, params.Q)-1, params.m)
-
-            aj = [polynomial_large(rand_a, params.Q) for j in 1:4]
+            aj = [polynomial_large(rand(BigInt(0):convert(BigInt, params.Q)-1, params.m), params.Q) for j in 1:4]
             ej = [polynomial_large(rand(-params.n:params.n, params.m), params.Q) for j in 1:4]
 
             bj = [aj[j] * ext_key + ej[j] for j in 1:4]

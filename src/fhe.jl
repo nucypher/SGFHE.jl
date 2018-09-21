@@ -468,14 +468,14 @@ function modulus_reduction(lwe::LWE, new_modulus)
 end
 
 
-function pack_lwes(bkey::BootstrapKey, lwes::Array{LWE, 1})
+function pack_lwes(bkey::BootstrapKey, lwes::Array{LWE{T}, 1}) where T
 
     params = bkey.params
 
     @assert length(lwes) == params.n
-    @assert all(lwe.modulus == params.r for lwe in lwes)
+    #@assert all(lwe.modulus == params.r for lwe in lwes)
 
-    lwe_trivial = LWE(zeros(params.n), params.Dr, params.r) # trivial LWE encrypting 1
+    lwe_trivial = LWE(zeros(T, params.n), T(params.Dr)) # trivial LWE encrypting 1
     new_lwes = [bootstrap_lwe(bkey, lwe_trivial, lwe)[1] for lwe in lwes]
 
     as = [polynomial(new_lwe.a, params.Q) for new_lwe in new_lwes]

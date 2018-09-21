@@ -6,7 +6,7 @@ using Random
 using SGFHE:
     Params, encrypt_private, encrypt_public, decrypt, PrivateKey, PublicKey,
     flatten_deterministic, flatten, RRElem, RRElemMontgomery, RadixNumber, polynomial_large,
-    decompose, external_product, extract_lwes, decrypt_lwe, BootstrapKey, bootstrap_lwe
+    decompose, external_product, extract_lwes, decrypt_lwe, BootstrapKey, bootstrap_lwe, pack_lwes
 
 
 function test_private()
@@ -291,7 +291,14 @@ function test_rlwe_to_lwe()
     @assert length(rlwe.a) == params.m
     @assert length(rlwe.b) == params.m
 
-    decrypted = decrypt(key, ct)
+    # Decrypt by converting back to lwes
+    lwes2 = extract_lwes(Ciphertext(params, rlwe))
+    for i in 1:params.n
+        @assert decrypt_lwe(lwes2[i]) == message[i]
+    end
+
+    # Decrypt directly
+    decrypted = decrypt(key, Ciphertext(params, rlwe))
     @assert message == decrypted
 end
 

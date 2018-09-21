@@ -6,7 +6,8 @@ using Random
 using SGFHE:
     Params, encrypt_private, encrypt_public, decrypt, PrivateKey, PublicKey,
     flatten_deterministic, flatten, RRElem, RRElemMontgomery, RadixNumber, polynomial_large,
-    decompose, external_product, extract_lwes, decrypt_lwe, BootstrapKey, bootstrap_lwe, pack_lwes
+    decompose, external_product, extract_lwes, decrypt_lwe, BootstrapKey, bootstrap_lwe, pack_lwes,
+    large_tp, large_rr_tp
 
 
 function test_private()
@@ -206,10 +207,13 @@ function test_decompose()
     a = polynomial_large(rand(Int128, p.n), q)
     b = polynomial_large(rand(Int128, p.n), q)
 
-    B_rr = RRElem{RadixNumber{2, UInt64}, q}(B)
-    B_m = RRElemMontgomery{RadixNumber{2, UInt64}, q}(B)
+    q_r = large_tp(q)
+    B_m = large_rr_tp{large_tp, q_r}(B)
 
-    u = decompose(a, b, B_m, l)
+    ll = Val(l)
+
+    u = decompose(a, b, B_m, ll)
+
     for x in u
         coeffs = convert.(BigInt, x.coeffs)
         @assert all(c <= 2 * B_bi || c >= q_bi - 2 * B_bi for c in coeffs)

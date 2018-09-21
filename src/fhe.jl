@@ -306,7 +306,15 @@ function decrypt_lwe(key::PrivateKey, lwe::LWE)
 end
 
 
-function flatten_deterministic(a::T, B::T, l::Integer) where T <: AbstractRRElem
+@inline @generated function zero(::Type{NTuple{N, T}}) where N where T
+    exprs = [:(zero(T)) for i in 1:N]
+    quote
+        tuple($(exprs...))
+    end
+end
+
+
+@inline function flatten_deterministic(a::T, B::T, ::Val{L}) where L where T <: AbstractRRElem
     # range offset
     two = T(2)
     if isodd(B)
@@ -316,15 +324,31 @@ function flatten_deterministic(a::T, B::T, l::Integer) where T <: AbstractRRElem
     end
 
     # decomposition offset
-    offset = s * sum(B.^(0:l-1))
-
-    decomp = Array{T}(undef, l)
-    a_offset = a + offset
-    for i in l-1:-1:0
-        d, a_offset = divrem(a_offset, B^i)
-        decomp[i + 1] = d
+    #offset = s * sum(B.^(0:l-1))
+    #a_offset = a + offset
+    pwrs = zero(NTuple{L, T})
+    pwr = one(T)
+    for i in 1:L
+        pwrs = Base.setindex(pwrs, pwr, i)
+        pwr *= B
     end
-    decomp .- s
+
+    for i in 1:L
+        a += s * pwrs[i]
+    end
+
+    #decomp = Array{T}(undef, l)
+    decomp = zero(NTuple{L, T})
+    for i in L:-1:1
+        d, a = divrem(a, pwrs[i])
+        decomp = Base.setindex(decomp, d, i)
+    end
+
+    for i in 1:L
+        decomp = Base.setindex(decomp, decomp[i] - s, i)
+    end
+
+    decomp
 end
 
 
@@ -345,10 +369,15 @@ function flatten(a::T, B::T, l::Integer) where T <: AbstractRRElem
 end
 
 
-function flatten_poly(a::Polynomial{T}, B::T, l::Integer) where T <: AbstractRRElem
-    decomp = flatten.(a.coeffs, B, l)
-    joined = cat(decomp..., dims=2)
-    [Polynomial(joined[i,:], a.cyclic) for i in 1:l]
+@Base.propagate_inbounds function flatten_poly(a::Polynomial{T}, B::T, l::Val{L}) where L where T <: AbstractRRElem
+    results = [Polynomial(zeros(T, length(a)), a.cyclic) for i in 1:L]
+    for j in 1:length(a)
+        decomp = flatten_deterministic(a.coeffs[j], B, l)
+        for i in 1:L
+            results[i].coeffs[j] = decomp[i]
+        end
+    end
+    results
 end
 
 
@@ -398,11 +427,12 @@ function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
     B_m = ptp(params.B)
     G = [v1 v0; B_m v0; v0 v1; v0 B_m]
 
-    print("bootstrap: ")
+    l = Val(2)
+
     for k = 1:params.n
         print(k, " ")
         # TODO: make sure u.a[k] fits into Int
-        a, b = external_product(a, b, mul.(bkey.key[k], convert(Int, u.a[k])) .+ G, B_m, 2)
+        a, b = external_product(a, b, mul.(bkey.key[k], convert(Int, u.a[k])) .+ G, B_m, l)
     end
     println()
 

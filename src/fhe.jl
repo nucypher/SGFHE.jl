@@ -335,16 +335,18 @@ function flatten(a::T, B::T, l::Integer) where T <: AbstractRRElem
         xmax = div(B, 2) * convert(T, 3)
     end
 
-    #x = rand(-xmax:xmax, l)
-    x = mod.(rand(-xmax:xmax, l), q)
-    rand_a = mod(a - sum(x .* B.^(0:l-1)), q)
-    y = flatten_deterministic(rand_a, B, l, q)
+    # TODO: can we avoid conversion here? xmax can be larger than an Int
+    xmax_i = convert(Int, xmax)
+    x = T.(rand(-xmax_i:xmax_i, l))
+
+    rand_a = a - sum(x .* B.^(0:l-1))
+    y = flatten_deterministic(rand_a, B, l)
     x + y
 end
 
 
 function flatten_poly(a::Polynomial{T}, B::T, l::Integer) where T <: AbstractRRElem
-    decomp = flatten_deterministic.(a.coeffs, B, l)
+    decomp = flatten.(a.coeffs, B, l)
     joined = cat(decomp..., dims=2)
     [Polynomial(joined[i,:], a.cyclic) for i in 1:l]
 end

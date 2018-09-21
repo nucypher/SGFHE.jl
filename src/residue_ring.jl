@@ -23,6 +23,10 @@ struct RRElem{T, M} <: AbstractRRElem
 end
 
 
+# TODO: this is used to prevent the convert(Integer, RadixNumber) to activate.
+# Is there a better way? Technically, this shouldn't be used at all - it's the constructor's job.
+convert(::Type{RRElem{T, M}}, x::RadixNumber) where T where M = RRElem(x, M)
+
 convert(::Type{RRElem{T, M}}, x::RRElem{T, M}) where T where M = x
 
 function convert(::Type{V}, x::RRElem{T, M}) where V <: Integer where T where M
@@ -148,7 +152,6 @@ end
 # Apparently we cannot just define a method for `y::Integer`, since there is a
 # `div(Unsigned, Union{...})` in Base, resulting in ambiguity.
 function div(x::RRElem{T, M}, y::Union{Int128, Int16, Int32, Int64, Int8}) where T where M
-    println("div integer")
     y < 0 ? div(-x, unsigned(-y)) : div(x, unsigned(y))
 end
 

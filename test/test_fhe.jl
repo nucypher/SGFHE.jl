@@ -166,14 +166,16 @@ function test_flatten()
     for l in (3, 4)
         for B in (3, 4)
             for q in (B^l, B^l - 3)
+                s = 2 * B
 
                 modulus = UInt16(q)
                 tp = RRElem{UInt16, modulus}
 
-                lim_lo = convert(tp, q - 2 * B)
-                lim_hi = convert(tp, 2 * B)
+                lim_lo = convert(tp, q - s)
+                lim_hi = convert(tp, s)
 
                 B_rr = convert(tp, B)
+
                 for a in 0:q-1
 
                     a_rr = convert(tp, a)

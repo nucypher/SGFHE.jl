@@ -1,18 +1,20 @@
 using Random
+using DarkIntegers
+using DarkIntegers: AbstractRRElem, with_modulus, modulus_reduction, with_length
 
 
 function polynomial_small(coeffs, modulus::UInt64)
-    Polynomial(RRElem{UInt64, modulus}, coeffs, 1)
+    Polynomial(RRElem{UInt64, modulus}.(coeffs), true)
 end
 
 
-const large_tp = UInt128 # RadixNumber{2, UInt64}
+const large_tp = UInt128 # MPNumber{2, UInt64}
 const large_rr_tp = RRElem
 
 
 function polynomial_large(coeffs, modulus::large_tp)
     tp = large_rr_tp{large_tp, modulus}
-    Polynomial(tp, coeffs, 1)
+    Polynomial(tp.(coeffs), true)
 end
 
 
@@ -155,12 +157,12 @@ struct LWE{T <: AbstractRRElem}
 end
 
 
-function +(l1::LWE, l2::LWE)
+function Base.:+(l1::LWE, l2::LWE)
     LWE(l1.a .+ l2.a, l1.b + l2.b)
 end
 
 
-function -(l1::LWE, l2::LWE)
+function Base.:-(l1::LWE, l2::LWE)
     LWE(l1.a .- l2.a, l1.b - l2.b)
 end
 
@@ -306,7 +308,7 @@ function decrypt_lwe(key::PrivateKey, lwe::LWE)
 end
 
 
-@inline @generated function zero(::Type{NTuple{N, T}}) where N where T
+@inline @generated function Base.zero(::Type{NTuple{N, T}}) where N where T
     exprs = [:(zero(T)) for i in 1:N]
     quote
         tuple($(exprs...))
@@ -352,7 +354,7 @@ end
 end
 
 
-function flatten(a::T, B::T, l::Integer) where T <: AbstractRRElem
+function flatten(a::T, B::T, l::Val{L}) where L where T <: AbstractRRElem
     if isodd(B)
         xmax = div(B-1, 2) * convert(T, 3)
     else
@@ -361,16 +363,23 @@ function flatten(a::T, B::T, l::Integer) where T <: AbstractRRElem
 
     # TODO: can we avoid conversion here? xmax can be larger than an Int
     xmax_i = convert(Int, xmax)
-    x = T.(rand(-xmax_i:xmax_i, l))
 
-    rand_a = a - sum(x .* B.^(0:l-1))
+    x = zero(NTuple{L, T})
+    for i in 1:L
+        x = Base.setindex(x, rand(-xmax_i:xmax_i), i)
+    end
+
+    rand_a = a - sum(x .* B.^(0:L-1))
     y = flatten_deterministic(rand_a, B, l)
-    x + y
+    for i in 1:L
+        x = Base.setindex(x, x[i] + y[i], i)
+    end
+    x
 end
 
 
 @Base.propagate_inbounds function flatten_poly(a::Polynomial{T}, B::T, l::Val{L}) where L where T <: AbstractRRElem
-    results = [Polynomial(zeros(T, length(a)), a.cyclic) for i in 1:L]
+    results = [Polynomial(zeros(T, length(a)), a.negacyclic) for i in 1:L]
     for j in 1:length(a)
         decomp = flatten_deterministic(a.coeffs[j], B, l)
         for i in 1:L
@@ -402,6 +411,17 @@ function external_product(a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomia
 end
 
 
+# Creates a polynomial `sum(x^j for j in powers) mod x^len +/- 1`.
+# Powers can be negative, or greater than `len`, in which case they will be properly looped over.
+function initial_poly(tp, powers, len, negacyclic)
+    coeffs = zeros(tp, len)
+    for i in powers
+        coeffs[mod(i, len) + 1] += negacyclic ? (mod(fld(i, len), 2) == 0 ? 1 : -1) : 1
+    end
+    Polynomial(coeffs, negacyclic)
+end
+
+
 function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
     params = bkey.params
     u = v1 + v2
@@ -411,15 +431,15 @@ function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
 
     # TODO: Dr == m / 2, so this can be calculated faster
     # In fact, it can be prepared in advance.
-    t = initial_poly(ptp, -Int(params.Dr):Int(params.Dr), params.m, 1)
+    t = initial_poly(ptp, -Int(params.Dr):Int(params.Dr), params.m, true)
 
     a = polynomial_large(zeros(Int, params.m), params.Q)
 
     # TODO: make sure u.b actually fits into Int
-    b = shift(t, -convert(Int, u.b)) * params.DQ_tilde
+    b = shift_polynomial(t, -convert(Int, u.b)) * params.DQ_tilde
 
     # multiplication by (x^j - 1)
-    mul(p, j) = shift(p, j) - p
+    mul(p, j) = shift_polynomial(p, j) - p
 
     # TODO: same as in BootstrapKey(); extract into a function?
     v0 = zero(ptp)
@@ -471,11 +491,6 @@ function shortened_external_product(a::Polynomial, b1::Polynomial, b2::Polynomia
 end
 
 
-function modulus_reduction(p::Polynomial{T}, new_modulus::V) where T where V
-    polynomial_small(type_change.(V, modulus_reduction.(p.coeffs, new_modulus)))
-end
-
-
 function to_rr(x::large_rr_tp{T, M}) where T where M
     convert(RRElem{T, M}, x)
 end
@@ -491,7 +506,7 @@ function big_to_small(x::RRElem{T, M}) where T where M
 end
 
 
-function modulus_reduction(lwe::LWE, new_modulus)
+function DarkIntegers.modulus_reduction(lwe::LWE, new_modulus)
     LWE(
         big_to_small.(modulus_reduction.(lwe.a, new_modulus)),
         big_to_small(modulus_reduction(lwe.b, new_modulus)))
@@ -524,3 +539,4 @@ function pack_lwes(bkey::BootstrapKey, lwes::Array{LWE{T}, 1}) where T
 
     RLWE(w, v)
 end
+

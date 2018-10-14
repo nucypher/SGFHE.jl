@@ -9,7 +9,7 @@ end
 
 
 const large_tp = UInt128 # MPNumber{2, UInt64}
-const large_rr_tp = RRElem
+const large_rr_tp = RRElemMontgomery
 
 
 function polynomial_large(coeffs, modulus::large_tp)
@@ -50,7 +50,7 @@ struct Params
             Qmax = 1225 * r^4 * n^2
 
             # 1220 r^4 n^2 <= Q <= 1225 r^4 n^2
-            Q = Qmax # need an odd modulus for Montgomery reduction to work
+            Q = Qmax-1 # need an odd modulus for Montgomery reduction to work
         end
 
         @assert mod(r, 8) == 0
@@ -138,7 +138,8 @@ struct BootstrapKey
         for i in 1:params.n
 
             # TODO: add rand() support for RadixInteger
-            aj = [polynomial_large(rand(BigInt(0):convert(BigInt, params.Q)-1, params.m), params.Q) for j in 1:4]
+            aj = [polynomial_large(
+                rand(BigInt(0):convert(BigInt, params.Q)-1, params.m), params.Q) for j in 1:4]
             ej = [polynomial_large(rand(-params.n:params.n, params.m), params.Q) for j in 1:4]
             bj = [aj[j] * ext_key + ej[j] for j in 1:4]
             C = [aj[1] bj[1]; aj[2] bj[2]; aj[3] bj[3]; aj[4] bj[4]] .+ ext_key.coeffs[i] * G
@@ -316,6 +317,7 @@ end
 end
 
 
+#=
 @inline function flatten_deterministic(a::T, B::T, ::Val{L}) where L where T <: AbstractRRElem
     # range offset
     two = T(2)
@@ -352,9 +354,57 @@ end
 
     decomp
 end
+=#
 
 
-function flatten(a::T, B::T, l::Val{L}) where L where T <: AbstractRRElem
+@inline function _flatten_deterministic(a::T, B::T, L::Int, s::T, offset::T, pwrs) where T
+    decomp = zero(NTuple{L, T})
+    a += offset
+    for i in L:-1:1
+        d, a = divrem(a, pwrs[i])
+        decomp = Base.setindex(decomp, d, i)
+    end
+
+    for i in 1:L
+        decomp = Base.setindex(decomp, decomp[i] - s, i)
+    end
+
+    decomp
+end
+
+
+@inline @generated function flatten_deterministic(
+        a::T, ::Val{B}, ::Val{L}) where {B, L, T <: AbstractRRElem}
+
+    # range offset
+    two = T(2)
+    if isodd(B)
+        s = ((B - 1) ÷ two)
+    else
+        s = (B ÷ two - 1)
+    end
+
+    pwrs = zero(NTuple{L, T})
+    pwr = one(T)
+    for i in 1:L
+        pwrs = Base.setindex(pwrs, pwr, i)
+        pwr *= B
+    end
+
+    offset = zero(T)
+    for i in 1:L
+        offset += s * pwrs[i]
+    end
+
+    quote
+        _flatten_deterministic(a, $B, $L, $s, $offset, $pwrs)
+    end
+end
+
+
+function flatten(a::T, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
+    # TODO: make into a generated function
+
     if isodd(B)
         xmax = div(B-1, 2) * convert(T, 3)
     else
@@ -370,7 +420,7 @@ function flatten(a::T, B::T, l::Val{L}) where L where T <: AbstractRRElem
     end
 
     rand_a = a - sum(x .* B.^(0:L-1))
-    y = flatten_deterministic(rand_a, B, l)
+    y = flatten_deterministic(rand_a, base, l)
     for i in 1:L
         x = Base.setindex(x, x[i] + y[i], i)
     end
@@ -378,10 +428,11 @@ function flatten(a::T, B::T, l::Val{L}) where L where T <: AbstractRRElem
 end
 
 
-@Base.propagate_inbounds function flatten_poly(a::Polynomial{T}, B::T, l::Val{L}) where L where T <: AbstractRRElem
+@Base.propagate_inbounds function flatten_poly(
+        a::Polynomial{T}, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
     results = [Polynomial(zeros(T, length(a)), a.negacyclic) for i in 1:L]
     for j in 1:length(a)
-        decomp = flatten_deterministic(a.coeffs[j], B, l)
+        decomp = flatten_deterministic(a.coeffs[j], base, l)
         for i in 1:L
             results[i].coeffs[j] = decomp[i]
         end
@@ -393,9 +444,9 @@ end
 """
 "triangle G" operator in the paper
 """
-function decompose(a::Polynomial{T}, b::Polynomial{T}, B::T, l) where T <: AbstractRRElem
-    a_decomp = flatten_poly(a, B, l)
-    b_decomp = flatten_poly(b, B, l)
+function decompose(a::Polynomial{T}, b::Polynomial{T}, base, l) where T <: AbstractRRElem
+    a_decomp = flatten_poly(a, base, l)
+    b_decomp = flatten_poly(b, base, l)
     [a_decomp; b_decomp]
 end
 
@@ -403,8 +454,9 @@ end
 """
 "circle with a dot" operator in the paper
 """
-function external_product(a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2}, B::T, l) where T
-    u = decompose(a, b, B, l)
+function external_product(
+        a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2}, base, l) where T
+    u = decompose(a, b, base, l)
     a_res = sum(u .* A[:,1])
     b_res = sum(u .* A[:,2])
     a_res, b_res
@@ -445,6 +497,7 @@ function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
     v0 = zero(ptp)
     v1 = one(ptp)
     B_m = ptp(params.B)
+    base = Val(B_m)
     G = [v1 v0; B_m v0; v0 v1; v0 B_m]
 
     l = Val(2)
@@ -452,7 +505,7 @@ function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
     for k = 1:params.n
         print(k, " ")
         # TODO: make sure u.a[k] fits into Int
-        a, b = external_product(a, b, mul.(bkey.key[k], convert(Int, u.a[k])) .+ G, B_m, l)
+        a, b = external_product(a, b, mul.(bkey.key[k], convert(Int, u.a[k])) .+ G, base, l)
     end
     println()
 

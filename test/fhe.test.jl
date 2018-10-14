@@ -2,23 +2,6 @@ using SGFHE
 using SGFHE: flatten_deterministic, flatten, polynomial_large, decompose, external_product
 using DarkIntegers
 
-using BenchmarkTools
-using BenchmarkTools: prettytime, prettymemory
-
-
-function benchmark_result(trial)
-    time_str = prettytime(minimum(trial.times))
-
-    if trial.allocs > 0
-        mem_str = prettymemory(trial.memory)
-        alloc_str = ", $mem_str ($(trial.allocs) allocs)"
-    else
-        alloc_str = ""
-    end
-
-    time_str * alloc_str
-end
-
 
 @testcase "encryption with a private key" begin
     params = Params(512)
@@ -76,11 +59,13 @@ end
         lim_hi = convert(tp, B - s - 1)
 
         B_rr = convert(tp, B)
+        base = Val(B_rr)
+
         for a in 0:q-1
 
             a_rr = convert(tp, a)
 
-            decomp_rr = flatten_deterministic(a_rr, B_rr, l_val)
+            decomp_rr = flatten_deterministic(a_rr, base, l_val)
             restore_rr = sum(decomp_rr .* B_rr.^(0:l-1))
 
             if !(restore_rr == a_rr)
@@ -116,6 +101,7 @@ end
     s = (B_i - 1) ÷ 2
 
     l_val = Val(l)
+    base = Val(B_m)
 
     for i in 1:1000
 
@@ -124,7 +110,7 @@ end
         a_rr = rrtp(a_i)
         a_m = mtp(a_i)
 
-        decomp_m = flatten_deterministic(a_m, B_m, l_val)
+        decomp_m = flatten_deterministic(a_m, base, l_val)
 
         restore_m = sum(decomp_m .* B_m.^(0:l-1))
 
@@ -149,43 +135,6 @@ end
 end
 
 
-@testcase tags=[:performance] "flatten_deterministic(), performance" begin
-
-    l_val = Val(2)
-
-    # Simple type performance
-    modulus = UInt64(2^55 - 1)
-    tp = RRElem{UInt64, modulus}
-    B = convert(tp, 2^31 - 1)
-    a = convert(tp, 2^50 - 1)
-    trial = @benchmark flatten_deterministic($a, $B, $l_val)
-    @test_result "UInt64: " * benchmark_result(trial)
-
-
-    # Simple type performance
-    modulus = UInt128(2)^80 - 1
-    tp = RRElem{UInt128, modulus}
-    B = convert(tp, UInt128(2)^51 - 1)
-    a = convert(tp, UInt128(2)^79 - 1)
-
-    trial = @benchmark flatten_deterministic($a, $B, $l_val)
-    @test_result "UInt128: " * benchmark_result(trial)
-
-
-    # Radix type performance
-    modulus = UInt128(2)^80 - 1
-    rtp = MPNumber{2, UInt64}
-    modulus_r = convert(rtp, modulus)
-    mtp = RRElemMontgomery{rtp, modulus_r}
-    B_m = convert(mtp, UInt128(2)^51 - 1)
-    a_m = convert(mtp, UInt128(2)^79 - 1)
-
-    trial = @benchmark flatten_deterministic($a_m, $B_m, $l_val)
-    @test_result "2xUInt64: " * benchmark_result(trial)
-
-end
-
-
 @testcase(
     "flatten()",
     for l in ([3, 4] => ["l=3", "l=4"]),
@@ -204,11 +153,13 @@ end
         lim_hi = convert(tp, s)
 
         B_rr = convert(tp, B)
+        base = Val(B_rr)
+
         for a in 0:q-1
 
             a_rr = convert(tp, a)
 
-            decomp_rr = flatten(a_rr, B_rr, l_val)
+            decomp_rr = flatten(a_rr, base, l_val)
             restore_rr = sum(decomp_rr .* B_rr.^(0:l-1))
 
             if !(restore_rr == a_rr)
@@ -244,7 +195,7 @@ end
 
     ll = Val(l)
 
-    u = decompose(a, b, B_m, ll)
+    u = decompose(a, b, Val(B_m), ll)
 
     for x in u
         coeffs = convert.(BigInt, x.coeffs)
@@ -266,9 +217,11 @@ end
     l = 2
     l_val = Val(l)
     large_tp = typeof(B)
-    large_rr_tp = RRElem{large_tp, q}
 
     q = B^l - one(large_tp)
+
+    large_rr_tp = RRElem{large_tp, q}
+
     a = polynomial_large(rand(Int128, p.n), q)
     b = polynomial_large(rand(Int128, p.n), q)
 
@@ -277,7 +230,7 @@ end
     B_m = cc(B)
     pz = polynomial_large(zeros(Int, p.n), q)
     G = ([pz pz; pz pz; pz pz; pz pz] .+ cc.([1 0; B 0; 0 1; 0 B]))
-    a_restored, b_restored = external_product(a, b, G, B_m, l_val)
+    a_restored, b_restored = external_product(a, b, G, Val(B_m), l_val)
 
     @test a == a_restored
     @test b == b_restored
@@ -314,25 +267,4 @@ end
         @assert r2 == bit1 | bit2
         @assert r3 == xor(bit1, bit2)
     end
-end
-
-
-@testcase tags=[:performance] "bootstrap_lwe(), performance" begin
-    params = Params(64)
-    key = PrivateKey(params)
-    bkey = BootstrapKey(params, key)
-
-    message = rand(Bool, params.n)
-    ct = encrypt_private(key, message)
-    lwes = extract_lwes(ct)
-
-    i = 1
-    lwe1 = lwes[i*2-1]
-    lwe2 = lwes[i*2]
-
-    bit1 = message[i*2-1]
-    bit2 = message[i*2]
-
-    trial = @benchmark bootstrap_lwe($bkey, $lwe1, $lwe2)
-    @test_result benchmark_result(trial)
 end

@@ -503,11 +503,9 @@ function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
     l = Val(2)
 
     for k = 1:params.n
-        print(k, " ")
         # TODO: make sure u.a[k] fits into Int
         a, b = external_product(a, b, mul.(bkey.key[k], convert(Int, u.a[k])) .+ G, base, l)
     end
-    println()
 
     a_and = LWE(
         extract(a, 3 * params.m ÷ 4, params.n),

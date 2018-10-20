@@ -309,95 +309,36 @@ function decrypt_lwe(key::PrivateKey, lwe::LWE)
 end
 
 
-@inline @generated function Base.zero(::Type{NTuple{N, T}}) where N where T
-    exprs = [:(zero(T)) for i in 1:N]
-    quote
-        tuple($(exprs...))
-    end
-end
-
-
-#=
-@inline function flatten_deterministic(a::T, B::T, ::Val{L}) where L where T <: AbstractRRElem
-    # range offset
-    two = T(2)
-    if isodd(B)
-        s = ((B - 1) ÷ two)
-    else
-        s = (B ÷ two - 1)
-    end
-
-    # decomposition offset
-    #offset = s * sum(B.^(0:l-1))
-    #a_offset = a + offset
-    pwrs = zero(NTuple{L, T})
-    pwr = one(T)
-    for i in 1:L
-        pwrs = Base.setindex(pwrs, pwr, i)
-        pwr *= B
-    end
-
-    for i in 1:L
-        a += s * pwrs[i]
-    end
-
-    #decomp = Array{T}(undef, l)
-    decomp = zero(NTuple{L, T})
-    for i in L:-1:1
-        d, a = divrem(a, pwrs[i])
-        decomp = Base.setindex(decomp, d, i)
-    end
-
-    for i in 1:L
-        decomp = Base.setindex(decomp, decomp[i] - s, i)
-    end
-
-    decomp
-end
-=#
-
-
-@inline function _flatten_deterministic(a::T, B::T, L::Int, s::T, offset::T, pwrs) where T
-    decomp = zero(NTuple{L, T})
-    a += offset
-    for i in L:-1:1
-        d, a = divrem(a, pwrs[i])
-        decomp = Base.setindex(decomp, d, i)
-    end
-
-    for i in 1:L
-        decomp = Base.setindex(decomp, decomp[i] - s, i)
-    end
-
-    decomp
-end
-
-
 @inline @generated function flatten_deterministic(
-        a::T, ::Val{B}, ::Val{L}) where {B, L, T <: AbstractRRElem}
+        a::T, ::Val{B}, l_val::Val{L}) where {B, L, T <: AbstractRRElem}
+
+    @assert typeof(B) == T
+    @assert L >= 1
 
     # range offset
-    two = T(2)
     if isodd(B)
-        s = ((B - 1) ÷ two)
+        s = (B - 1) ÷ 2
     else
-        s = (B ÷ two - 1)
+        s = B ÷ 2 - 1
     end
 
-    pwrs = zero(NTuple{L, T})
-    pwr = one(T)
-    for i in 1:L
-        pwrs = Base.setindex(pwrs, pwr, i)
-        pwr *= B
-    end
+    pwrs = [B^i for i in 0:L-1]
+    offset = sum(pwrs) * s
+    decomp_blocks = [:( divrem(a, $(pwrs[i])) ) for i in L:-1:2]
 
-    offset = zero(T)
-    for i in 1:L
-        offset += s * pwrs[i]
-    end
+    zero_exprs = [:(zero(T)) for i in 1:L]
 
     quote
-        _flatten_deterministic(a, $B, $L, $s, $offset, $pwrs)
+        decomp = tuple($(zero_exprs...))
+        a += $offset
+        $(decomp_blocks...)
+        decomp = Base.setindex(decomp, a, 1)
+
+        for i in 1:L
+            decomp = Base.setindex(decomp, decomp[i] - $s, i)
+        end
+
+        decomp
     end
 end
 

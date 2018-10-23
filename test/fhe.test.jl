@@ -73,7 +73,7 @@ end
                 break
             end
 
-            if !all(d >= lim_hi || d <= lim_lo for d in decomp_rr)
+            if !all(d <= lim_hi || d >= lim_lo for d in decomp_rr)
                 @test_fail "Values outside the limit for $a: $decomp_rr"
                 break
             end
@@ -103,6 +103,9 @@ end
     l_val = Val(l)
     base = Val(B_m)
 
+    lim_lo = modulus_i - s
+    lim_hi = B_i - s - 1
+
     for i in 1:1000
 
         a_i = rand(UInt32) % modulus_i
@@ -127,7 +130,7 @@ end
             break
         end
 
-        if !all(d >= B_i - s - 1 || d <= s for d in decomp)
+        if !all(d <= lim_hi || d >= lim_lo for d in decomp)
             @test_fail "Values outside the limit for $a_i: $decomp"
             break
         end
@@ -167,7 +170,7 @@ end
                 break
             end
 
-            if !all(d >= lim_hi || d <= lim_lo for d in decomp_rr)
+            if !all(d <= lim_hi || d >= lim_lo for d in decomp_rr)
                 @test_fail "Values outside the limit for $a: $decomp_rr"
                 break
             end

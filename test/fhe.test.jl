@@ -257,17 +257,18 @@ end
         bit1 = message[i*2-1]
         bit2 = message[i*2]
 
-        println("Plaintext bits $bit1 $bit2")
-
         cr1, cr2, cr3 = bootstrap_lwe(bkey, lwe1, lwe2)
 
         r1, r2, r3 = [decrypt_lwe(key, lwe) for lwe in (cr1, cr2, cr3)]
 
-        println("Result: AND=$r1, OR=$r2, XOR=$r3")
-        println("Reference: AND=$(bit1 & bit2), OR=$(bit1 | bit2), XOR=$(xor(bit1, bit2))")
+        ref1 = bit1 & bit2
+        ref2 = bit1 | bit2
+        ref3 = xor(bit1, bit2)
 
-        @assert r1 == bit1 & bit2
-        @assert r2 == bit1 | bit2
-        @assert r3 == xor(bit1, bit2)
+        if r1 != ref1 || r2 != ref2 || r3 != ref3
+            @critical @test_fail(
+                "Incorrect result for pair $i: AND=$r1, OR=$r2, XOR=$r3, " *
+                "expected AND=$ref1, OR=$ref2, XOR=$ref3")
+        end
     end
 end

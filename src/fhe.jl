@@ -309,6 +309,14 @@ function decrypt_lwe(key::PrivateKey, lwe::LWE)
 end
 
 
+@inline @generated function zero_tuple(::Type{NTuple{N, T}}) where {N, T}
+    exprs = [:(zero(T)) for i in 1:N]
+    quote
+        tuple($(exprs...))
+    end
+end
+
+
 @inline @generated function flatten_deterministic(
         a::T, ::Val{B}, l_val::Val{L}) where {B, L, T <: AbstractRRElem}
 
@@ -331,10 +339,8 @@ end
         end
         for i in L:-1:2]
 
-    zero_exprs = [:(zero(T)) for i in 1:L]
-
     quote
-        decomp = tuple($(zero_exprs...))
+        decomp = zero_tuple(NTuple{L, T})
         a += $offset
         $(decomp_blocks...)
         decomp = Base.setindex(decomp, a, 1)
@@ -360,7 +366,7 @@ function flatten(a::T, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem
     # TODO: can we avoid conversion here? xmax can be larger than an Int
     xmax_i = convert(Int, xmax)
 
-    x = zero(NTuple{L, T})
+    x = zero_tuple(NTuple{L, T})
     for i in 1:L
         x = Base.setindex(x, rand(-xmax_i:xmax_i), i)
     end

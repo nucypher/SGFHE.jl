@@ -324,7 +324,12 @@ end
 
     pwrs = [B^i for i in 0:L-1]
     offset = sum(pwrs) * s
-    decomp_blocks = [:( divrem(a, $(pwrs[i])) ) for i in L:-1:2]
+    decomp_blocks = [
+        quote
+            r, a = divrem(a, $(pwrs[i]))
+            decomp = Base.setindex(decomp, r, $i)
+        end
+        for i in L:-1:2]
 
     zero_exprs = [:(zero(T)) for i in 1:L]
 

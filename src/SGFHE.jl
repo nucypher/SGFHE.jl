@@ -1,5 +1,7 @@
 module SGFHE
 
+include("utils.jl")
+
 include("fhe.jl")
 export Params
 export PrivateKey

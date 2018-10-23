@@ -179,26 +179,25 @@ end
 
 
 @testcase "decompose()" begin
-    p = Params(64)
+    p = Params(64; rr_type=RRElem)
 
-    B = p.B
+    B = typeof(p.B)(10) # p.B
     B_bi = BigInt(B)
     l = 2
 
     q = B^l - one(typeof(B))
     q_bi = BigInt(q)
-    a = polynomial_large(rand(Int128, p.n), q)
-    b = polynomial_large(rand(Int128, p.n), q)
+    a = polynomial_large(p, rand(Int128, p.n), q)
+    b = polynomial_large(p, rand(Int128, p.n), q)
 
-    large_tp = UInt128
-    large_rr_tp = RRElem
+    poly_type = eltype(a.coeffs)
 
-    q_r = large_tp(q)
-    B_m = large_rr_tp{large_tp, q_r}(B)
+    B_m = poly_type(B)
 
     ll = Val(l)
+    b_val = Val(B_m)
 
-    u = decompose(a, b, Val(B_m), ll)
+    u = decompose(a, b, b_val, ll)
 
     for x in u
         coeffs = convert.(BigInt, x.coeffs)
@@ -223,15 +222,15 @@ end
 
     q = B^l - one(large_tp)
 
-    large_rr_tp = RRElem{large_tp, q}
+    a = polynomial_large(p, rand(Int128, p.n), q)
+    b = polynomial_large(p, rand(Int128, p.n), q)
 
-    a = polynomial_large(rand(Int128, p.n), q)
-    b = polynomial_large(rand(Int128, p.n), q)
+    large_rr_tp = eltype(a.coeffs)
 
     cc(x) = large_rr_tp(x)
 
     B_m = cc(B)
-    pz = polynomial_large(zeros(Int, p.n), q)
+    pz = polynomial_large(p, zeros(Int, p.n), q)
     G = ([pz pz; pz pz; pz pz; pz pz] .+ cc.([1 0; B 0; 0 1; 0 B]))
     a_restored, b_restored = external_product(a, b, G, Val(B_m), l_val)
 

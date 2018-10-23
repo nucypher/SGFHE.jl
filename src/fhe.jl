@@ -1,75 +1,125 @@
+using Primes
 using Random
 using DarkIntegers
-using DarkIntegers: AbstractRRElem, with_modulus, modulus_reduction, with_length
+using DarkIntegers: AbstractRRElem
 
 
-function polynomial_small(coeffs, modulus::UInt64)
-    Polynomial(RRElem{UInt64, modulus}.(coeffs), true)
+"""
+Find a residue ring modulus `q` that:
+- `qmin <= q <= qmax`
+- `q` is prime
+- `q - 1` is a multiple of `2n` (needed for NTT polynomial multiplication)
+where `n` is a power of 2.
+"""
+function find_modulus(n::Int, qmin::T, qmax::Union{T, Nothing}=nothing) where T
+
+    @assert 2^round(Int, log2(n)) == n
+    pwr2 = n * 2
+
+    q = zero(T)
+    j = cld(qmin - 1, pwr2)
+
+    while true
+        q = j * pwr2 + 1
+
+        if !(qmax === nothing) && q > qmax
+            break
+        end
+
+        if isprime(q)
+            break
+        end
+
+        j += 1
+    end
+
+    if iszero(q)
+        error("Cound not find a modulus between $qmin and $qmax")
+    end
+
+    q
 end
 
 
-const large_tp = UInt128 # MPNumber{2, UInt64}
-const large_rr_tp = RRElemMontgomery
+const SmallType = UInt64
 
 
-function polynomial_large(coeffs, modulus::large_tp)
-    tp = large_rr_tp{large_tp, modulus}
-    Polynomial(tp.(coeffs), true)
-end
-
-
-struct Params
+struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
     n :: Int
-    r :: UInt64
-    q :: UInt64
-    Q :: large_tp
+    r :: SmallType
+    q :: SmallType
+    Q :: LargeType
     t :: Int
     m :: Int
-    B :: large_tp
-    Dr :: UInt64
-    Dq :: UInt64
-    DQ_tilde :: large_tp
+    B :: LargeType
+    Dr :: SmallType
+    Dq :: SmallType
+    DQ_tilde :: LargeType
 
-    function Params(n::Int)
+    function Params(n::Int; rlwe_type=nothing, rr_type=nothing)
 
         @assert n >= 64
         @assert 2^log2(n) == n
+        @assert rr_type in (nothing, RRElem, RRElemMontgomery)
 
-        rho = 1220
+        r = 16n
+        q = find_modulus(n, BigInt(r * n))
 
-        if n == 512
-            # From the paper
-            r = 16n
-            q = r * (41n + 20) + 1
-            Q = r * (BigInt(rho) * r^3 * n^2 + 19) + 1
+        @assert sizeof(SmallType) * 8 > log2(q)
+
+        Qmin = BigInt(r)^4 * n^2 * 1220
+        Qmax = BigInt(r)^4 * n^2 * 1225
+        Q = find_modulus(n, Qmin, Qmax) # TODO: Q-1 should be divisible by 2m == r, perhaps
+
+        if rlwe_type === nothing
+            if log2(Q) <= 64
+                rlwe_type = UInt64
+            elseif log2(Q) <= 128
+                rlwe_type = UInt128
+            else
+                error()
+            end
         else
-            r = 16n # r >= 16n
-            q = r * n # q >= nr
-
-            Qmin = 1220 * r^4 * n^2
-            Qmax = 1225 * r^4 * n^2
-
-            # 1220 r^4 n^2 <= Q <= 1225 r^4 n^2
-            Q = Qmax-1 # need an odd modulus for Montgomery reduction to work
+            @assert sizeof(rlwe_type) * 8 > log2(Q)
         end
 
-        @assert mod(r, 8) == 0
+        if rr_type === nothing
+            rr_type = RRElemMontgomery
+        end
 
         t = ceil(Int, log2(r)) - 1
         m = div(r, 2)
 
-        B = 35 * r^2 * n
+        B = BigInt(35) * r^2 * n
         Dr = div(r, 4) # `floor` in the paper, but since r > 0 it is the same
         Dq = div(q, 4) # see above
         DQ_tilde = div(Q, 8) # see above
 
-        new(
-            n, UInt64(r), UInt64(q),
-            convert(large_tp, Q), t, m,
-            convert(large_tp, B), UInt64(Dr), UInt64(Dq),
-            convert(large_tp, DQ_tilde))
+        new{rlwe_type, rr_type}(
+            n, r, q,
+            Q, t, m,
+            B, Dr, Dq,
+            DQ_tilde)
     end
 
+end
+
+
+function polynomial_r(
+        params::Params{LargeType, RRType}, coeffs, modulus::SmallType) where {LargeType, RRType}
+    Polynomial(RRElem{SmallType, modulus}.(coeffs), true)
+end
+
+
+function polynomial_small(
+        params::Params{LargeType, RRType}, coeffs, modulus::SmallType) where {LargeType, RRType}
+    Polynomial(RRType{SmallType, modulus}.(coeffs), true)
+end
+
+
+function polynomial_large(
+        params::Params{LargeType, RRType}, coeffs, modulus::LargeType) where {LargeType, RRType}
+    Polynomial(RRType{LargeType, modulus}.(coeffs), true)
 end
 
 
@@ -86,7 +136,7 @@ struct PrivateKey
     key :: Polynomial
 
     function PrivateKey(params::Params)
-        key = polynomial_small(rand(Bool, params.n), params.r)
+        key = polynomial_r(params, rand(Bool, params.n), params.r)
         new(params, key)
     end
 end
@@ -98,16 +148,18 @@ struct PublicKey
     k0 :: Polynomial
     k1 :: Polynomial
 
-    function PublicKey(params::Params, sk::PrivateKey)
+    function PublicKey(params::Params{LargeType, RRType}, sk::PrivateKey) where {LargeType, RRType}
 
         params = sk.params
 
-        k0 = polynomial_small(rand(0:params.q-1, params.n), params.q)
+        k0 = polynomial_small(params, rand(0:params.q-1, params.n), params.q)
 
         # More precisely, we need e_max < Dq / (41n)
         e_max = cld(params.Dq, 41 * params.n) - 1
-        e = polynomial_small(rand(0:2*e_max, params.n), params.q) - e_max
-        k1 = k0 * with_modulus(sk.key, params.q) + e
+        e = polynomial_small(params, rand(0:2*e_max, params.n), params.q) - e_max
+
+        key_q = change_representation(RRType, change_modulus_unsafe(params.q, sk.key))
+        k1 = k0 * key_q + e
 
         new(params, k0, k1)
     end
@@ -119,15 +171,12 @@ struct BootstrapKey
     params :: Params
     key :: Array{Array{Polynomial, 2}, 1}
 
-    function BootstrapKey(params::Params, sk::PrivateKey)
+    function BootstrapKey(params::Params{LargeType, RRType}, sk::PrivateKey) where {LargeType, RRType}
 
-        # TODO: set the polynomial element type in a single place
-        ptp = large_rr_tp{large_tp, params.Q}
+        ptp = RRType{LargeType, params.Q}
 
-        # TODO: generalize and move to polynomial.jl?
-        key_coeffs = convert.(BigInt, sk.key.coeffs)
-
-        ext_key = with_length(polynomial_large(key_coeffs, params.Q), params.m)
+        key_coeffs = [sk.key.coeffs; zeros(eltype(sk.key.coeffs), params.m - params.n)]
+        ext_key = polynomial_large(params, key_coeffs, params.Q)
 
         v0 = zero(ptp)
         v1 = one(ptp)
@@ -139,8 +188,11 @@ struct BootstrapKey
 
             # TODO: add rand() support for RadixInteger
             aj = [polynomial_large(
+                params,
                 rand(BigInt(0):convert(BigInt, params.Q)-1, params.m), params.Q) for j in 1:4]
-            ej = [polynomial_large(rand(-params.n:params.n, params.m), params.Q) for j in 1:4]
+            ej = [polynomial_large(
+                params,
+                rand(-params.n:params.n, params.m), params.Q) for j in 1:4]
             bj = [aj[j] * ext_key + ej[j] for j in 1:4]
             C = [aj[1] bj[1]; aj[2] bj[2]; aj[3] bj[3]; aj[4] bj[4]] .+ ext_key.coeffs[i] * G
             bkey[i] = C
@@ -235,14 +287,14 @@ function encrypt_private(key::PrivateKey, message::Array{Bool, 1})
 
     u = rand(Bool, params.n)
     a_bits = prng_expand(u, params.t + 1)
-    a = polynomial_small(packbits(BigInt, a_bits), params.r)
+    a = polynomial_r(key.params, packbits(BigInt, a_bits), params.r)
 
     # TODO: Why 1/8? According to p.6 in the paper, even 1/2 should work.
     w_range = signed(div(params.Dr, 8))
 
-    w = polynomial_small(rand(-w_range:w_range, length(message)), params.r)
+    w = polynomial_r(key.params, rand(-w_range:w_range, length(message)), params.r)
 
-    message_poly = polynomial_small(message, params.r)
+    message_poly = polynomial_r(key.params, message, params.r)
     b1 = a * key.key + w + message_poly * params.Dr
 
     # TODO: currently `div` is not implemented for RR elements,
@@ -260,20 +312,20 @@ function encrypt_public(key::PublicKey, message:: Array{Bool, 1})
 
     params = key.params
 
-    u = polynomial_small(rand(-1:1, params.n), params.q)
+    u = polynomial_small(key.params, rand(-1:1, params.n), params.q)
 
     w1_max = signed(div(params.Dq, 41 * params.n))
-    w1 = polynomial_small(rand(-w1_max:w1_max, params.n), params.q)
+    w1 = polynomial_small(key.params, rand(-w1_max:w1_max, params.n), params.q)
 
     w2_max = signed(div(params.Dq, 82))
-    w2 = polynomial_small(rand(-w2_max:w2_max, params.n), params.q)
+    w2 = polynomial_small(key.params, rand(-w2_max:w2_max, params.n), params.q)
 
-    message_poly = polynomial_small(message, params.q)
+    message_poly = polynomial_small(key.params, message, params.q)
     a1 = key.k0 * u + w1
     a2 = key.k1 * u + w2 + message_poly * params.Dq
 
-    a = modulus_reduction(a1, params.r)
-    b = modulus_reduction(a2, params.r)
+    a = reduce_modulus(RRElem, SmallType, params.r, a1)
+    b = reduce_modulus(RRElem, SmallType, params.r, a2)
 
     # TODO: `b` can be safely divided further by `(2^(params.t - 5)` without loss of info.
     # For now we're saving the generic `b`, compatible with the one produced in private encryption.
@@ -417,7 +469,7 @@ end
 
 # Creates a polynomial `sum(x^j for j in powers) mod x^len +/- 1`.
 # Powers can be negative, or greater than `len`, in which case they will be properly looped over.
-function initial_poly(tp, powers, len, negacyclic)
+function _initial_poly(tp, powers, len, negacyclic)
     coeffs = zeros(tp, len)
     for i in powers
         coeffs[mod(i, len) + 1] += negacyclic ? (mod(fld(i, len), 2) == 0 ? 1 : -1) : 1
@@ -426,18 +478,19 @@ function initial_poly(tp, powers, len, negacyclic)
 end
 
 
+function initial_poly(params::Params{LargeType, RRType}) where {LargeType, RRType}
+    ptp = RRType{LargeType, params.Q}
+    _initial_poly(ptp, -Int(params.Dr):Int(params.Dr), params.m, true)
+end
+
+
 function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
     params = bkey.params
     u = v1 + v2
 
-    # TODO: remove polynomial elem type hardcoding
-    ptp = large_rr_tp{large_tp, params.Q}
+    t = initial_poly(bkey.params)
 
-    # TODO: Dr == m / 2, so this can be calculated faster
-    # In fact, it can be prepared in advance.
-    t = initial_poly(ptp, -Int(params.Dr):Int(params.Dr), params.m, true)
-
-    a = polynomial_large(zeros(Int, params.m), params.Q)
+    a = polynomial_large(bkey.params, zeros(Int, params.m), params.Q)
 
     # TODO: make sure u.b actually fits into Int
     b = shift_polynomial(t, -convert(Int, u.b)) * params.DQ_tilde
@@ -446,6 +499,7 @@ function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
     mul(p, j) = shift_polynomial(p, j) - p
 
     # TODO: same as in BootstrapKey(); extract into a function?
+    ptp = eltype(t.coeffs)
     v0 = zero(ptp)
     v1 = one(ptp)
     B_m = ptp(params.B)
@@ -468,9 +522,9 @@ function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
 
     a_xor = a_or - a_and
 
-    c_and = modulus_reduction(to_rr(a_and), params.r)
-    c_or = modulus_reduction(to_rr(a_or), params.r)
-    c_xor = modulus_reduction(to_rr(a_xor), params.r)
+    c_and = reduce_modulus(RRElem, SmallType, params.r, a_and)
+    c_or = reduce_modulus(RRElem, SmallType, params.r, a_or)
+    c_xor = reduce_modulus(RRElem, SmallType, params.r, a_xor)
 
     c_and, c_or, c_xor
 end
@@ -494,25 +548,10 @@ function shortened_external_product(a::Polynomial, b1::Polynomial, b2::Polynomia
 end
 
 
-function to_rr(x::large_rr_tp{T, M}) where T where M
-    convert(RRElem{T, M}, x)
-end
-
-function to_rr(x::LWE)
-    LWE(to_rr.(x.a), to_rr(x.b))
-end
-
-
-function big_to_small(x::RRElem{T, M}) where T where M
-    small_tp = UInt64
-    RRElem(convert(small_tp, x.value), convert(small_tp, M))
-end
-
-
-function DarkIntegers.modulus_reduction(lwe::LWE, new_modulus)
+function reduce_modulus(rr_repr, rr_type, new_modulus, lwe::LWE)
     LWE(
-        big_to_small.(modulus_reduction.(lwe.a, new_modulus)),
-        big_to_small(modulus_reduction(lwe.b, new_modulus)))
+        reduce_modulus.(rr_repr, rr_type, new_modulus, lwe.a),
+        reduce_modulus(rr_repr, rr_type, new_modulus, lwe.b))
 end
 
 

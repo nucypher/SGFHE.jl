@@ -55,3 +55,8 @@ end
     nm = convert(rr_base_type(T), new_modulus)
     Polynomial(reduce_modulus.(new_repr, new_base_type, nm, p.coeffs), p.negacyclic)
 end
+
+
+@inline function change_length(new_length, p::Polynomial{T}) where T
+    Polynomial([p.coeffs; zeros(T, new_length - length(p))], p.negacyclic)
+end

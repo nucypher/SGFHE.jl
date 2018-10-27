@@ -1,5 +1,7 @@
 using SGFHE
-using SGFHE: flatten_deterministic, flatten, polynomial_large, decompose, external_product
+using SGFHE:
+    flatten_deterministic, flatten, polynomial_large, decompose, external_product, Ciphertext,
+    decrypt_large
 using DarkIntegers
 
 
@@ -40,8 +42,8 @@ end
 @testcase(
     "flatten_deterministic()",
     for l in ([3, 4] => ["l=3", "l=4"]),
-            B in ([3, 4] => ["B=3", "B=4"]),
-            dq in ([0, 3] => ["q=B^l", "q=B^l-3"])
+            B in ([4, 5] => ["B=4", "B=5"]),
+            dq in ([1, 3] => ["q=B^l-1", "q=B^l-3"])
 
         q = B^l - dq
         l_val = Val(l)
@@ -87,7 +89,7 @@ end
     len = 4
     rtp = MPNumber{len, tp}
 
-    modulus_i = 2^30-1
+    modulus_i = 2^31-1
     modulus_r = convert(rtp, modulus_i)
 
     rrtp = RRElem{rtp, modulus_r}
@@ -141,8 +143,8 @@ end
 @testcase(
     "flatten()",
     for l in ([3, 4] => ["l=3", "l=4"]),
-            B in ([3, 4] => ["B=3", "B=4"]),
-            dq in ([0, 3] => ["q=B^l", "q=B^l-3"])
+            B in ([4, 5] => ["B=3", "B=4"]),
+            dq in ([1, 3] => ["q=B^l", "q=B^l-3"])
 
         q = B^l - dq
         l_val = Val(l)
@@ -270,4 +272,26 @@ end
                 "expected AND=$ref1, OR=$ref2, XOR=$ref3")
         end
     end
+end
+
+
+@testcase "pack_lwes()" begin
+    params = Params(64)
+
+    message = rand(Bool, params.n)
+    key = PrivateKey(params)
+    bkey = BootstrapKey(params, key)
+    ct = encrypt_private(key, message)
+
+    lwes = extract_lwes(ct)
+    rlwe = pack_lwes(bkey, lwes, key, message)
+
+    # Decrypt by converting back to lwes
+    lwes2 = extract_lwes(Ciphertext(params, rlwe))
+    restored_message = [decrypt_lwe(key, lwe) for lwe in lwes2]
+    @test restored_message == message
+
+    # Decrypt directly
+    restored_message = decrypt_large(key, Ciphertext(params, rlwe))
+    @test restored_message == message
 end

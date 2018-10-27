@@ -484,7 +484,7 @@ function initial_poly(params::Params{LargeType, RRType}) where {LargeType, RRTyp
 end
 
 
-function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
+function bootstrap_lwe_internal(bkey::BootstrapKey, v1::LWE, v2::LWE)
     params = bkey.params
     u = v1 + v2
 
@@ -522,6 +522,13 @@ function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
 
     a_xor = a_or - a_and
 
+    a_and, a_or, a_xor
+end
+
+
+function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
+    a_and, a_or, a_xor = bootstrap_lwe_internal(bkey, v1, v2)
+
     c_and = reduce_modulus(RRElem, SmallType, params.r, a_and)
     c_or = reduce_modulus(RRElem, SmallType, params.r, a_or)
     c_xor = reduce_modulus(RRElem, SmallType, params.r, a_xor)
@@ -543,7 +550,7 @@ end
 
 
 function shortened_external_product(a::Polynomial, b1::Polynomial, b2::Polynomial, B)
-    u1, u2 = decompose(a, B, 2)
+    u1, u2 = flatten_poly(a, B, Val(2))
     u1 * b1 + u2 * b2
 end
 
@@ -555,29 +562,61 @@ function reduce_modulus(rr_repr, rr_type, new_modulus, lwe::LWE)
 end
 
 
-function pack_lwes(bkey::BootstrapKey, lwes::Array{LWE{T}, 1}) where T
+function decrypt_large(key::PrivateKey, ct::Ciphertext)
+    # TODO: join with decrypt()
+
+    params = key.params
+
+    # TODO: if we're using "packed" `b`, `ct.rlwe.b` should be multiplied
+    # by `2^(params.t - 4)` (for private encrypted) or `2^(params.t - 5)` (for public encrpyted).
+    key = change_length(params.m, key.key)
+    b1 = ct.rlwe.b - key * ct.rlwe.a
+
+    # Plus half-interval (Dr) to "snap" to the values 0, Dr, 2Dr, ...
+    # div(x + Dr/2, Dr) is equivalent to round(x / Dr),
+    # but unlike it works well with the modulo values
+    # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
+    # TODO: remove type hardcoding
+    b1_coeffs = convert.(UInt64, b1.coeffs .+ div(params.Dr, 2))
+
+    convert.(Bool, div.(b1_coeffs[1:params.n], params.Dr))
+end
+
+
+function pack_lwes(bkey::BootstrapKey, lwes::Array{LWE{T}, 1}, pk, message) where T
 
     params = bkey.params
 
     @assert length(lwes) == params.n
-    #@assert all(lwe.modulus == params.r for lwe in lwes)
 
     lwe_trivial = LWE(zeros(T, params.n), T(params.Dr)) # trivial LWE encrypting 1
-    new_lwes = [bootstrap_lwe(bkey, lwe_trivial, lwe)[1] for lwe in lwes]
+    new_lwes = [bootstrap_lwe_internal(bkey, lwe_trivial, lwe)[1] for lwe in lwes]
 
-    as = [polynomial(new_lwe.a, params.Q) for new_lwe in new_lwes]
-    b = polynomial([new_lwe.b for new_lwe in new_lwes], params.Q)
+    ptp = eltype(new_lwes[1].a)
+
+    as = [
+        change_length(
+            params.m,
+            Polynomial([new_lwes[j].a[i] for j in 1:params.n], true))
+        for i in 1:params.n]
+    b = change_length(
+            params.m,
+            Polynomial([new_lwe.b for new_lwe in new_lwes], true))
+
+
+    B_m = ptp(params.B)
+    base = Val(B_m)
 
     w_tilde = sum(shortened_external_product(
-        as[i], bkey.key[i][3,1], bkey.key[i][4,1]) for i in 1:params.n)
+        as[i], bkey.key[i][3,1], bkey.key[i][4,1], base) for i in 1:params.n)
     v_tilde = sum(shortened_external_product(
-        as[i], bkey.key[i][3,2], bkey.key[i][4,2]) for i in 1:params.n)
+        as[i], bkey.key[i][3,2], bkey.key[i][4,2], base) for i in 1:params.n)
 
     w1_tilde = -w_tilde
     v1_tilde = b - v_tilde
 
-    w = modulus_reduction(w1_tilde, params.r)
-    v = modulus_reduction(v1_tilde, params.r)
+    w = reduce_modulus(RRElem, SmallType, params.r, w1_tilde)
+    v = reduce_modulus(RRElem, SmallType, params.r, v1_tilde)
 
     RLWE(w, v)
 end

@@ -13,5 +13,6 @@ export decrypt
 export decrypt_lwe
 export extract_lwes
 export bootstrap_lwe
+export pack_lwes
 
 end

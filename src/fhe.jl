@@ -8,19 +8,15 @@ using DarkIntegers: AbstractRRElem
 Find a residue ring modulus `q` that:
 - `qmin <= q <= qmax`
 - `q` is prime
-- `q - 1` is a multiple of `2n` (needed for NTT polynomial multiplication)
-where `n` is a power of 2.
+- `q - 1` is a multiple of `n`
 """
 function find_modulus(n::Int, qmin::T, qmax::Union{T, Nothing}=nothing) where T
 
-    @assert 2^round(Int, log2(n)) == n
-    pwr2 = n * 2
-
     q = zero(T)
-    j = cld(qmin - 1, pwr2)
+    j = cld(qmin - 1, n)
 
     while true
-        q = j * pwr2 + 1
+        q = j * n + 1
 
         if !(qmax === nothing) && q > qmax
             break
@@ -63,7 +59,10 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
         @assert rr_type in (nothing, RRElem, RRElemMontgomery)
 
         r = 16n
-        q = find_modulus(n, BigInt(r * n))
+
+        # `q-1` will be a multiple of `2n`,
+        # meaning that NTT can be used for the multiplication of polynomials of length `n`.
+        q = find_modulus(2n, BigInt(r * n))
 
         @assert sizeof(SmallType) * 8 > log2(q)
 
@@ -72,7 +71,10 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
 
         Qmin = BigInt(r)^4 * n^2 * 1220
         Qmax = BigInt(r)^4 * n^2 * 1225
-        Q = find_modulus(m, Qmin, Qmax)
+
+        # `q-1` will be a multiple of `2n`,
+        # meaning that NTT can be used for the multiplication of polynomials of length `m`.
+        Q = find_modulus(2m, Qmin, Qmax)
 
         if rlwe_type === nothing
             if log2(Q) <= 64

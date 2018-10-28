@@ -340,6 +340,25 @@ function encrypt(key::PrivateKey, rng::AbstractRNG, message::AbstractArray{Bool,
 end
 
 
+function encrypt(key::PrivateKey, rng::AbstractRNG, message::Bool)
+    # TODO: This is technically not part of the original paper, but it works.
+    # Consult S. Gao about this.
+
+    params = key.params
+    tp = RRElem{SmallType, params.q}
+    a = convert.(tp, rand(rng, 0:params.q-1, params.n))
+
+    # Max error according to Lemma 2.3
+    tau = signed(params.q * (params.n - 3) ÷ (2 * params.r))
+
+    e = convert(tp, mod(rand(rng, -tau:tau), params.q))
+    b = sum(a .* convert.(Int, key.key.coeffs)) + e + (message ? params.Dq : 0)
+
+    big_lwe = LWE(a, b)
+    EncryptedBit(reduce_modulus(RRElem, SmallType, params.r, big_lwe))
+end
+
+
 struct PublicEncryptedCiphertext
     params :: Params
     a_bits :: BitArray{2}

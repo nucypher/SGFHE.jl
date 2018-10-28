@@ -35,7 +35,7 @@ for rr_type in [RRElem, RRElemMontgomery],
 
     params = Params(64; rlwe_type=num_type, rr_type=rr_type)
 
-    poly_type = rr_type{num_type, params.q}
+    poly_type = rr_type{num_type, params.Q}
 
     flatten_rng = use_rng ? MersenneTwister() : nothing
 
@@ -62,7 +62,7 @@ for rr_type in [RRElem, RRElemMontgomery],
 
     params = Params(1024; rlwe_type=num_type, rr_type=rr_type)
 
-    poly_type = rr_type{num_type, params.q}
+    poly_type = rr_type{num_type, params.Q}
 
     flatten_rng = use_rng ? MersenneTwister() : nothing
 
@@ -91,7 +91,7 @@ for     rr_type in [RRElem, RRElemMontgomery],
 
     rng = use_rng ? MersenneTwister() : nothing
 
-    poly_type = rr_type{num_type, p.q}
+    poly_type = rr_type{num_type, p.Q}
 
     a = Polynomial(poly_type.(rand(Int128, p.n)), true)
     b = Polynomial(poly_type.(rand(Int128, p.n)), true)

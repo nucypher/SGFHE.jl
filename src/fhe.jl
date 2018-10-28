@@ -67,9 +67,12 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
 
         @assert sizeof(SmallType) * 8 > log2(q)
 
+        t = Int(log2(r)) - 1
+        m = div(r, 2)
+
         Qmin = BigInt(r)^4 * n^2 * 1220
         Qmax = BigInt(r)^4 * n^2 * 1225
-        Q = find_modulus(n, Qmin, Qmax) # TODO: Q-1 should be divisible by 2m == r, perhaps
+        Q = find_modulus(m, Qmin, Qmax)
 
         if rlwe_type === nothing
             if log2(Q) <= 64
@@ -86,9 +89,6 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
         if rr_type === nothing
             rr_type = RRElemMontgomery
         end
-
-        t = Int(log2(r)) - 1
-        m = div(r, 2)
 
         B = BigInt(35) * r^2 * n
         Dr = div(r, 4) # `floor` in the paper, but since r > 0 it is the same

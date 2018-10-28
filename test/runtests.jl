@@ -1,6 +1,7 @@
 using Jute
 
-include("fhe.test.jl")
+include("api.test.jl")
+include("internals.test.jl")
 include("performance.test.jl")
 
 exit(runtests())

@@ -87,7 +87,7 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
             rr_type = RRElemMontgomery
         end
 
-        t = ceil(Int, log2(r)) - 1
+        t = Int(log2(r)) - 1
         m = div(r, 2)
 
         B = BigInt(35) * r^2 * n
@@ -105,25 +105,22 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
 end
 
 
-function polynomial_r(
-        params::Params{LargeType, RRType}, coeffs, modulus::SmallType) where {LargeType, RRType}
+function polynomial_r(params::Params, coeffs, modulus::SmallType)
     Polynomial(RRElem{SmallType, modulus}.(coeffs), true)
 end
 
 
-function polynomial_small(
-        params::Params{LargeType, RRType}, coeffs, modulus::SmallType) where {LargeType, RRType}
-    Polynomial(RRType{SmallType, modulus}.(coeffs), true)
+function polynomial_small(params::Params{LT, RRT}, coeffs, modulus::SmallType) where {LT, RRT}
+    Polynomial(RRT{SmallType, modulus}.(coeffs), true)
 end
 
 
-function polynomial_large(
-        params::Params{LargeType, RRType}, coeffs, modulus::LargeType) where {LargeType, RRType}
-    Polynomial(RRType{LargeType, modulus}.(coeffs), true)
+function polynomial_large(params::Params{LT, RRT}, coeffs, modulus::LT) where {LT, RRT}
+    Polynomial(RRT{LT, modulus}.(coeffs), true)
 end
 
 
-function prng_expand(seq::Array{Bool, 1}, factor::Int)
+function prng_expand(seq::BitArray{1}, factor::Int)
     # Deterministically but randomly expand `seq` `factor` times.
     # TODO: should be done with SHAKE-128 or 256.
     rng = Random.MersenneTwister(hash(seq))
@@ -135,8 +132,8 @@ struct PrivateKey
     params :: Params
     key :: Polynomial
 
-    function PrivateKey(params::Params)
-        key = polynomial_r(params, rand(Bool, params.n), params.r)
+    function PrivateKey(params::Params, rng::AbstractRNG)
+        key = polynomial_r(params, rand(rng, Bool, params.n), params.r)
         new(params, key)
     end
 end
@@ -148,17 +145,17 @@ struct PublicKey
     k0 :: Polynomial
     k1 :: Polynomial
 
-    function PublicKey(params::Params{LargeType, RRType}, sk::PrivateKey) where {LargeType, RRType}
+    function PublicKey(params::Params{LT, RRT}, rng::AbstractRNG, sk::PrivateKey) where {LT, RRT}
 
         params = sk.params
 
-        k0 = polynomial_small(params, rand(0:params.q-1, params.n), params.q)
+        k0 = polynomial_small(params, rand(rng, 0:params.q-1, params.n), params.q)
 
         # More precisely, we need e_max < Dq / (41n)
         e_max = cld(params.Dq, 41 * params.n) - 1
-        e = polynomial_small(params, rand(0:2*e_max, params.n), params.q) - e_max
+        e = polynomial_small(params, rand(rng, 0:2*e_max, params.n), params.q) - e_max
 
-        key_q = change_representation(RRType, change_modulus_unsafe(params.q, sk.key))
+        key_q = change_representation(RRT, change_modulus_unsafe(params.q, sk.key))
         k1 = k0 * key_q + e
 
         new(params, k0, k1)
@@ -171,9 +168,9 @@ struct BootstrapKey
     params :: Params
     key :: Array{Array{Polynomial, 2}, 1}
 
-    function BootstrapKey(params::Params{LargeType, RRType}, sk::PrivateKey) where {LargeType, RRType}
+    function BootstrapKey(params::Params{LT, RRT}, rng::AbstractRNG, sk::PrivateKey) where {LT, RRT}
 
-        ptp = RRType{LargeType, params.Q}
+        ptp = RRT{LT, params.Q}
 
         key_coeffs = [sk.key.coeffs; zeros(eltype(sk.key.coeffs), params.m - params.n)]
         ext_key = polynomial_large(params, key_coeffs, params.Q)
@@ -189,10 +186,10 @@ struct BootstrapKey
             # TODO: add rand() support for RadixInteger
             aj = [polynomial_large(
                 params,
-                rand(BigInt(0):convert(BigInt, params.Q)-1, params.m), params.Q) for j in 1:4]
+                rand(rng, BigInt(0):convert(BigInt, params.Q)-1, params.m), params.Q) for j in 1:4]
             ej = [polynomial_large(
                 params,
-                rand(-params.n:params.n, params.m), params.Q) for j in 1:4]
+                rand(rng, -params.n:params.n, params.m), params.Q) for j in 1:4]
             bj = [aj[j] * ext_key + ej[j] for j in 1:4]
             C = [aj[1] bj[1]; aj[2] bj[2]; aj[3] bj[3]; aj[4] bj[4]] .+ ext_key.coeffs[i] * G
             bkey[i] = C
@@ -243,28 +240,35 @@ end
 
 
 """
-RLWE ciphertext
+RLWE ciphertext (packed)
 """
+struct PackedCiphertext
+    params :: Params
+    rlwe :: RLWE
+end
+
+
 struct Ciphertext
     params :: Params
     rlwe :: RLWE
-
-    # a and b in RLWE can be made out of u and v (which take less space)
-    # after the initial private key encryption.
-    # But for simplicity we're just keeping generic RLWE `a` and `b`
 end
 
 
-function extract_lwes(ct::Ciphertext)
+struct EncryptedBit
+    lwe :: LWE
+end
+
+
+function split_ciphertext(ct::Union{Ciphertext, PackedCiphertext})
     n = ct.params.n
-    [extract_lwe(ct.rlwe, i, n) for i in 1:n]
+    [EncryptedBit(extract_lwe(ct.rlwe, i, n)) for i in 1:n]
 end
 
 
-function packbits(tp::Type, bits::Array{Bool, 2})
+function packbits(tp::Type, bits::Union{Array{Bool, 2}, BitArray{2}})
     result = zeros(tp, size(bits, 2))
     for i in 1:size(bits, 1)
-        result .+= bits[i,:] * 2^(i-1)
+        result .+= tp.(bits[i,:]) * 2^(i-1)
     end
     result
 end
@@ -273,52 +277,85 @@ end
 function unpackbits(arr::Array{T, 1}, itemsize::Int) where T
     result = Array{Bool}(undef, itemsize, length(arr))
     for i in 1:itemsize
-        result[i,:] = Array(arr .& 2^(itemsize-1) .> 0)
+        result[i,:] = Array(arr .& 2^(i-1) .> 0)
     end
     result
 end
 
 
-function encrypt_private(key::PrivateKey, message::Array{Bool, 1})
+struct PrivateEncryptedCiphertext
+    params :: Params
+    u :: BitArray{1}
+    v :: BitArray{2}
+end
 
+
+function _deterministic_expand(params::Params, u)
+    a_bits = prng_expand(BitArray(u), params.t + 1)
+    polynomial_r(params, packbits(BigInt, a_bits), params.r)
+end
+
+
+function _encrypt_private(key::PrivateKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
     params = key.params
 
     @assert length(message) == params.n
 
-    u = rand(Bool, params.n)
-    a_bits = prng_expand(u, params.t + 1)
-    a = polynomial_r(key.params, packbits(BigInt, a_bits), params.r)
+    u = rand(rng, Bool, params.n)
+    a = _deterministic_expand(params, u)
 
     # TODO: Why 1/8? According to p.6 in the paper, even 1/2 should work.
     w_range = signed(div(params.Dr, 8))
-
-    w = polynomial_r(key.params, rand(-w_range:w_range, length(message)), params.r)
+    w = polynomial_r(key.params, rand(rng, -w_range:w_range, length(message)), params.r)
 
     message_poly = polynomial_r(key.params, message, params.r)
-    b1 = a * key.key + w + message_poly * params.Dr
+    b = a * key.key + w + message_poly * params.Dr
 
-    # TODO: currently `div` is not implemented for RR elements,
-    # but we only need this part if we want the packed representation.
-    #b_packed = div(b1, 2^(params.t - 4))
-    #v = unpackbits(b_packed.coeffs, 5)
-
-    # TODO: could only save `u` and `v` which take less space than `a` and `b`,
-    # but contain the same information.
-    Ciphertext(params, RLWE(a, b1))
+    u, RLWE(a, b)
 end
 
 
-function encrypt_public(key::PublicKey, message:: Array{Bool, 1})
+function encrypt_optimal(key::PrivateKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
+    params = key.params
+    u, rlwe = _encrypt_private(key, rng, message)
+    b_packed = div(rlwe.b, 2^(params.t - 4))
+    v = unpackbits(convert.(BigInt, b_packed.coeffs), 5)
+    PrivateEncryptedCiphertext(params, BitArray(u), BitArray(v))
+end
+
+
+function normalize_ciphertext(ct::PrivateEncryptedCiphertext)
+    params = ct.params
+    a = _deterministic_expand(params, ct.u)
+    b = polynomial_r(params, packbits(BigInt, ct.v), params.r) * 2^(params.t - 4)
+    PackedCiphertext(params, RLWE(a, b))
+end
+
+
+function encrypt(key::PrivateKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
+    u, rlwe = _encrypt_private(key, rng, message)
+    PackedCiphertext(key.params, rlwe)
+end
+
+
+struct PublicEncryptedCiphertext
+    params :: Params
+    a_bits :: BitArray{2}
+    b_bits :: BitArray{2}
+end
+
+
+function _encrypt_public(key::PublicKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
 
     params = key.params
 
-    u = polynomial_small(key.params, rand(-1:1, params.n), params.q)
+    u = polynomial_small(key.params, rand(rng, -1:1, params.n), params.q)
 
     w1_max = signed(div(params.Dq, 41 * params.n))
-    w1 = polynomial_small(key.params, rand(-w1_max:w1_max, params.n), params.q)
+    w1 = polynomial_small(key.params, rand(rng, -w1_max:w1_max, params.n), params.q)
 
     w2_max = signed(div(params.Dq, 82))
-    w2 = polynomial_small(key.params, rand(-w2_max:w2_max, params.n), params.q)
+    w2 = polynomial_small(key.params, rand(rng, -w2_max:w2_max, params.n), params.q)
 
     message_poly = polynomial_small(key.params, message, params.q)
     a1 = key.k0 * u + w1
@@ -331,15 +368,44 @@ function encrypt_public(key::PublicKey, message:: Array{Bool, 1})
     # For now we're saving the generic `b`, compatible with the one produced in private encryption.
     # b = polynomial(round.(a2.coeffs * params.r / (2^(params.t - 5) * params.q)), params.r)
 
-    Ciphertext(params, RLWE(a, b))
+    RLWE(a, b)
 end
 
 
-function decrypt(key::PrivateKey, ct::Ciphertext)
+function encrypt_optimal(key::PublicKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
+
     params = key.params
 
-    # TODO: if we're using "packed" `b`, `ct.rlwe.b` should be multiplied
-    # by `2^(params.t - 4)` (for private encrypted) or `2^(params.t - 5)` (for public encrpyted).
+    rlwe = _encrypt_public(key, rng, message)
+
+    # Only upper 6 bits of rlwe.b are important.
+    # So we need to save (t + 1) == log2(r) bits of rlwe.a and 6 bits or rlwe.b
+
+    a_bits = unpackbits(convert.(BigInt, rlwe.a.coeffs), params.t + 1)
+
+    b_packed = div(rlwe.b, 2^(params.t - 5))
+    b_bits = unpackbits(convert.(BigInt, b_packed.coeffs), 6)
+
+    PublicEncryptedCiphertext(params, a_bits, b_bits)
+end
+
+
+function normalize_ciphertext(ct::PublicEncryptedCiphertext)
+    params = ct.params
+    a = polynomial_r(params, packbits(BigInt, ct.a_bits), params.r)
+    b = polynomial_r(params, packbits(BigInt, ct.b_bits), params.r) * 2^(params.t - 5)
+    PackedCiphertext(params, RLWE(a, b))
+end
+
+
+function encrypt(key::PublicKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
+    PackedCiphertext(key.params, _encrypt_public(key, rng, message))
+end
+
+
+function decrypt(key::PrivateKey, ct::PackedCiphertext)
+    params = key.params
+
     b1 = ct.rlwe.b - key.key * ct.rlwe.a
 
     # Plus half-interval (Dr) to "snap" to the values 0, Dr, 2Dr, ...
@@ -353,8 +419,28 @@ function decrypt(key::PrivateKey, ct::Ciphertext)
 end
 
 
-function decrypt_lwe(key::PrivateKey, lwe::LWE)
-    b1 = lwe.b - sum(lwe.a .* key.key.coeffs)
+function decrypt(key::PrivateKey, ct::Ciphertext)
+    # TODO: join with decrypt()
+
+    params = key.params
+
+    key = change_length(params.m, key.key)
+    b1 = ct.rlwe.b - key * ct.rlwe.a
+
+    # Plus half-interval (Dr) to "snap" to the values 0, Dr, 2Dr, ...
+    # div(x + Dr/2, Dr) is equivalent to round(x / Dr),
+    # but unlike it works well with the modulo values
+    # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
+    # TODO: remove type hardcoding
+    b1_coeffs = convert.(UInt64, b1.coeffs .+ div(params.Dr, 2))
+
+    convert.(Bool, div.(b1_coeffs[1:params.n], params.Dr))
+end
+
+
+
+function decrypt(key::PrivateKey, enc_bit::EncryptedBit)
+    b1 = enc_bit.lwe.b - sum(enc_bit.lwe.a .* key.key.coeffs)
 
     # TODO: for some reason the snapping here requires the Dr/4 == r/16 shift.
     convert(Bool, div(b1 + key.params.Dr ÷ 2, key.params.Dr))
@@ -369,7 +455,8 @@ end
 end
 
 
-@inline @generated function flatten_deterministic(
+@inline @generated function flatten(
+        rng::Nothing,
         a::T, ::Val{B}, l_val::Val{L}) where {B, L, T <: AbstractRRElem}
 
     @assert typeof(B) == T
@@ -406,7 +493,7 @@ end
 end
 
 
-function flatten(a::T, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
+function flatten(rng::AbstractRNG, a::T, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
     # TODO: make into a generated function
 
     if isodd(B)
@@ -420,11 +507,11 @@ function flatten(a::T, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem
 
     x = zero_tuple(NTuple{L, T})
     for i in 1:L
-        x = Base.setindex(x, rand(-xmax_i:xmax_i), i)
+        x = Base.setindex(x, rand(rng, -xmax_i:xmax_i), i)
     end
 
     rand_a = a - sum(x .* B.^(0:L-1))
-    y = flatten_deterministic(rand_a, base, l)
+    y = flatten(nothing, rand_a, base, l)
     for i in 1:L
         x = Base.setindex(x, x[i] + y[i], i)
     end
@@ -433,10 +520,11 @@ end
 
 
 @Base.propagate_inbounds function flatten_poly(
+        rng::Union{AbstractRNG, Nothing},
         a::Polynomial{T}, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
     results = [Polynomial(zeros(T, length(a)), a.negacyclic) for i in 1:L]
     for j in 1:length(a)
-        decomp = flatten_deterministic(a.coeffs[j], base, l)
+        decomp = flatten(rng, a.coeffs[j], base, l)
         for i in 1:L
             results[i].coeffs[j] = decomp[i]
         end
@@ -448,9 +536,11 @@ end
 """
 "triangle G" operator in the paper
 """
-function decompose(a::Polynomial{T}, b::Polynomial{T}, base, l) where T <: AbstractRRElem
-    a_decomp = flatten_poly(a, base, l)
-    b_decomp = flatten_poly(b, base, l)
+function decompose(
+        rng::Union{AbstractRNG, Nothing},
+        a::Polynomial{T}, b::Polynomial{T}, base, l) where T <: AbstractRRElem
+    a_decomp = flatten_poly(rng, a, base, l)
+    b_decomp = flatten_poly(rng, b, base, l)
     [a_decomp; b_decomp]
 end
 
@@ -459,8 +549,9 @@ end
 "circle with a dot" operator in the paper
 """
 function external_product(
+        rng::Union{AbstractRNG, Nothing},
         a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2}, base, l) where T
-    u = decompose(a, b, base, l)
+    u = decompose(rng, a, b, base, l)
     a_res = sum(u .* A[:,1])
     b_res = sum(u .* A[:,2])
     a_res, b_res
@@ -478,15 +569,18 @@ function _initial_poly(tp, powers, len, negacyclic)
 end
 
 
-function initial_poly(params::Params{LargeType, RRType}) where {LargeType, RRType}
-    ptp = RRType{LargeType, params.Q}
+function initial_poly(params::Params{LT, RRT}) where {LT, RRT}
+    ptp = RRT{LT, params.Q}
     _initial_poly(ptp, -Int(params.Dr):Int(params.Dr), params.m, true)
 end
 
 
-function bootstrap_lwe_internal(bkey::BootstrapKey, v1::LWE, v2::LWE)
+function _bootstrap_internal(
+        bkey::BootstrapKey, rng::Union{AbstractRNG, Nothing},
+        enc_bit1::EncryptedBit, enc_bit2::EncryptedBit)
+
     params = bkey.params
-    u = v1 + v2
+    u = enc_bit1.lwe + enc_bit2.lwe
 
     t = initial_poly(bkey.params)
 
@@ -510,7 +604,7 @@ function bootstrap_lwe_internal(bkey::BootstrapKey, v1::LWE, v2::LWE)
 
     for k = 1:params.n
         # TODO: make sure u.a[k] fits into Int
-        a, b = external_product(a, b, mul.(bkey.key[k], convert(Int, u.a[k])) .+ G, base, l)
+        a, b = external_product(rng, a, b, mul.(bkey.key[k], convert(Int, u.a[k])) .+ G, base, l)
     end
 
     a_and = LWE(
@@ -526,31 +620,25 @@ function bootstrap_lwe_internal(bkey::BootstrapKey, v1::LWE, v2::LWE)
 end
 
 
-function bootstrap_lwe(bkey::BootstrapKey, v1::LWE, v2::LWE)
-    a_and, a_or, a_xor = bootstrap_lwe_internal(bkey, v1, v2)
+function bootstrap(
+        bkey::BootstrapKey, rng::Union{AbstractRNG, Nothing},
+        enc_bit1::EncryptedBit, enc_bit2::EncryptedBit)
+
+    params = bkey.params
+
+    a_and, a_or, a_xor = _bootstrap_internal(bkey, rng, enc_bit1, enc_bit2)
 
     c_and = reduce_modulus(RRElem, SmallType, params.r, a_and)
     c_or = reduce_modulus(RRElem, SmallType, params.r, a_or)
     c_xor = reduce_modulus(RRElem, SmallType, params.r, a_xor)
 
-    c_and, c_or, c_xor
+    EncryptedBit(c_and), EncryptedBit(c_or), EncryptedBit(c_xor)
 end
 
 
-function bootstrap(bkey::BootstrapKey, ct1::Ciphertext, ct2::Ciphertext)
-    lwes1 = extract_lwe(ct1)
-    lwes2 = extract_lwe(ct2)
-
-    for i in 1:params.n
-        lwe1 = lwes1[i]
-        lwe2 = lwes2[i]
-        c1, c2, c3 = bootstrap_lwe(bkey, lwe1, lwe2)
-    end
-end
-
-
-function shortened_external_product(a::Polynomial, b1::Polynomial, b2::Polynomial, B)
-    u1, u2 = flatten_poly(a, B, Val(2))
+function shortened_external_product(
+        rng::Union{AbstractRNG, Nothing}, a::Polynomial, b1::Polynomial, b2::Polynomial, B)
+    u1, u2 = flatten_poly(rng, a, B, Val(2))
     u1 * b1 + u2 * b2
 end
 
@@ -562,35 +650,19 @@ function reduce_modulus(rr_repr, rr_type, new_modulus, lwe::LWE)
 end
 
 
-function decrypt_large(key::PrivateKey, ct::Ciphertext)
-    # TODO: join with decrypt()
-
-    params = key.params
-
-    # TODO: if we're using "packed" `b`, `ct.rlwe.b` should be multiplied
-    # by `2^(params.t - 4)` (for private encrypted) or `2^(params.t - 5)` (for public encrpyted).
-    key = change_length(params.m, key.key)
-    b1 = ct.rlwe.b - key * ct.rlwe.a
-
-    # Plus half-interval (Dr) to "snap" to the values 0, Dr, 2Dr, ...
-    # div(x + Dr/2, Dr) is equivalent to round(x / Dr),
-    # but unlike it works well with the modulo values
-    # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
-    # TODO: remove type hardcoding
-    b1_coeffs = convert.(UInt64, b1.coeffs .+ div(params.Dr, 2))
-
-    convert.(Bool, div.(b1_coeffs[1:params.n], params.Dr))
-end
-
-
-function pack_lwes(bkey::BootstrapKey, lwes::Array{LWE{T}, 1}, pk, message) where T
+function pack_encrypted_bits(
+        bkey::BootstrapKey, rng::Union{AbstractRNG, Nothing},
+        enc_bits::AbstractArray{EncryptedBit, 1})
 
     params = bkey.params
 
-    @assert length(lwes) == params.n
+    @assert length(enc_bits) == params.n
 
-    lwe_trivial = LWE(zeros(T, params.n), T(params.Dr)) # trivial LWE encrypting 1
-    new_lwes = [bootstrap_lwe_internal(bkey, lwe_trivial, lwe)[1] for lwe in lwes]
+    # trivial LWE encrypting 1
+    T = eltype(enc_bits[1].lwe.a)
+    enc_trivial = EncryptedBit(LWE(zeros(T, params.n), T(params.Dr)))
+
+    new_lwes = [_bootstrap_internal(bkey, rng, enc_trivial, enc_bit)[1] for enc_bit in enc_bits]
 
     ptp = eltype(new_lwes[1].a)
 
@@ -603,14 +675,13 @@ function pack_lwes(bkey::BootstrapKey, lwes::Array{LWE{T}, 1}, pk, message) wher
             params.m,
             Polynomial([new_lwe.b for new_lwe in new_lwes], true))
 
-
     B_m = ptp(params.B)
     base = Val(B_m)
 
     w_tilde = sum(shortened_external_product(
-        as[i], bkey.key[i][3,1], bkey.key[i][4,1], base) for i in 1:params.n)
+        nothing, as[i], bkey.key[i][3,1], bkey.key[i][4,1], base) for i in 1:params.n)
     v_tilde = sum(shortened_external_product(
-        as[i], bkey.key[i][3,2], bkey.key[i][4,2], base) for i in 1:params.n)
+        nothing, as[i], bkey.key[i][3,2], bkey.key[i][4,2], base) for i in 1:params.n)
 
     w1_tilde = -w_tilde
     v1_tilde = b - v_tilde
@@ -618,6 +689,6 @@ function pack_lwes(bkey::BootstrapKey, lwes::Array{LWE{T}, 1}, pk, message) wher
     w = reduce_modulus(RRElem, SmallType, params.r, w1_tilde)
     v = reduce_modulus(RRElem, SmallType, params.r, v1_tilde)
 
-    RLWE(w, v)
+    Ciphertext(params, RLWE(w, v))
 end
 

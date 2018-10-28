@@ -495,8 +495,8 @@ end
 end
 
 
-function flatten(rng::AbstractRNG, a::T, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
-    # TODO: make into a generated function
+@inline @generated function flatten(
+        rng::AbstractRNG, a::T, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
 
     if isodd(B)
         xmax = div(B-1, 2) * convert(T, 3)
@@ -507,17 +507,29 @@ function flatten(rng::AbstractRNG, a::T, base::Val{B}, l::Val{L}) where {B, L, T
     # TODO: can we avoid conversion here? xmax can be larger than an Int
     xmax_i = convert(Int, xmax)
 
-    x = zero_tuple(NTuple{L, T})
-    for i in 1:L
-        x = Base.setindex(x, rand(rng, -xmax_i:xmax_i), i)
-    end
+    pwrs = [B^i for i in 0:L-1]
 
-    rand_a = a - sum(x .* B.^(0:L-1))
-    y = flatten(nothing, rand_a, base, l)
-    for i in 1:L
-        x = Base.setindex(x, x[i] + y[i], i)
+    rand_a_sub_blocks = [
+        quote
+            rand_a -= x[$i] * $(pwrs[i])
+        end
+        for i in 1:L]
+
+    quote
+        x = zero_tuple(NTuple{L, T})
+        for i in 1:L
+            x = Base.setindex(x, convert(T, rand(rng, -$xmax_i:$xmax_i)), i)
+        end
+
+        rand_a = a
+        $(rand_a_sub_blocks...)
+
+        y = flatten(nothing, rand_a, base, l)
+        for i in 1:L
+            x = Base.setindex(x, x[i] + y[i], i)
+        end
+        x
     end
-    x
 end
 
 

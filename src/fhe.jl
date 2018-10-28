@@ -443,8 +443,6 @@ end
 
 function decrypt(key::PrivateKey, enc_bit::EncryptedBit)
     b1 = enc_bit.lwe.b - sum(enc_bit.lwe.a .* key.key.coeffs)
-
-    # TODO: for some reason the snapping here requires the Dr/4 == r/16 shift.
     convert(Bool, div(b1 + key.params.Dr ÷ 2, key.params.Dr))
 end
 

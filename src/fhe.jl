@@ -153,7 +153,7 @@ struct PublicKey
 
         k0 = polynomial_small(params, rand(rng, 0:params.q-1, params.n), params.q)
 
-        # More precisely, we need e_max < Dq / (41n)
+        # TODO: more precisely, we need e_max < Dq / (41n)
         e_max = cld(params.Dq, 41 * params.n) - 1
         e = polynomial_small(params, rand(rng, 0:2*e_max, params.n), params.q) - e_max
 

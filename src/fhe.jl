@@ -638,12 +638,13 @@ function _bootstrap_internal(
         a, b = external_product(rng, a, b, mul.(bkey.key[k], convert(Int, u.a[k])) .+ G, base, l)
     end
 
+    # `+1` as compared to the paper because of 1-based arrays in Julia
     a_and = LWE(
-        extract(a, 3 * params.m ÷ 4, params.n),
-        ptp(params.DQ_tilde) + b.coeffs[3 * params.m ÷ 4])
+        extract(a, 3 * params.m ÷ 4 + 1, params.n),
+        ptp(params.DQ_tilde) + b.coeffs[3 * params.m ÷ 4 + 1])
     a_or = LWE(
-        -extract(a, params.m ÷ 4, params.n),
-        ptp(params.DQ_tilde) - b.coeffs[params.m ÷ 4])
+        -extract(a, params.m ÷ 4 + 1, params.n),
+        ptp(params.DQ_tilde) - b.coeffs[params.m ÷ 4 + 1])
 
     a_xor = a_or - a_and
 

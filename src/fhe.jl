@@ -227,7 +227,7 @@ end
 
 function extract(a::Polynomial, i::Integer, n::Integer)
     @assert i <= length(a)
-    if i <= n
+    if i < n
         [a.coeffs[i:-1:1]; -a.coeffs[end:-1:end-(n-i-1)]]
     else
         # TODO: this case is not considered in the paper, behavior according to S. Gao

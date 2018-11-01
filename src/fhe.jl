@@ -602,7 +602,7 @@ end
 
 function initial_poly(params::Params{LT, RRT}) where {LT, RRT}
     ptp = RRT{LT, params.Q}
-    _initial_poly(ptp, -Int(params.Dr):Int(params.Dr), params.m, true)
+    _initial_poly(ptp, -Int(params.Dr-1):Int(params.Dr-1), params.m, true)
 end
 
 

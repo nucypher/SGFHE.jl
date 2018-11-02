@@ -1,16 +1,18 @@
-# Public API
+# API reference
+
+## Public API
 
 ```@meta
 CurrentModule = SGFHE
 ```
 
-## Scheme parameters
+### Scheme parameters
 
 ```@docs
 Params
 ```
 
-## Key generation
+### Key generation
 
 ```@docs
 PrivateKey
@@ -18,20 +20,20 @@ PublicKey
 BootstrapKey
 ```
 
-## Encryption
+### Encryption
 
 ```@docs
 encrypt
 encrypt_optimal
 ```
 
-## Decryption
+### Decryption
 
 ```@docs
 decrypt
 ```
 
-## Ciphertext transformations
+### Ciphertext transformations
 
 ```@docs
 normalize_ciphertext
@@ -39,15 +41,15 @@ split_ciphertext
 pack_encrypted_bits
 ```
 
-## Bootstrap
+### Bootstrap
 
 ```@docs
 bootstrap
 ```
 
-# Internals
+## Internals
 
-## Returned types
+### Returned types
 
 ```@docs
 SGFHE.PrivateEncryptedCiphertext
@@ -57,7 +59,7 @@ SGFHE.Ciphertext
 SGFHE.EncryptedBit
 ```
 
-## Internal functions
+### Internal functions
 
 ```@docs
 find_modulus

@@ -22,7 +22,7 @@ Conversely, a vector of coefficients can be created out of a polynomial with the
 
 ### Negative powers in polynomials
 
-We make an occasional use of polynomials where some terms have negative powers (see [Bootstrap](@ref) and [Packing LWEs](@ref)), that is linear combinations of expressions ``x^{-j} \,\mathrm{mod}\,(x^n+1)``. The modulus in this case is formally taken as
+We make an occasional use of polynomials where some terms have negative powers (see [Bootstrap](@ref Bootstrap-theory) and [Packing LWEs](@ref)), that is linear combinations of expressions ``x^{-j} \,\mathrm{mod}\,(x^n+1)``. The modulus in this case is formally taken as
 ```math
 x^{-j} \,\mathrm{mod}\,(x^n+1)
 = x^{-j} - x^{-j} (x^n+1)
@@ -83,14 +83,14 @@ The function ``\mathrm{ModRed}[a, q_1, q_2]`` where ``0 \le x < q_1`` and ``q_2 
 
 ``\mathrm{ModRed}`` can be applied to a vector, converting each of its elements. That is, if ``\boldsymbol{b} = \mathrm{ModRed}[\boldsymbol{a}, q_1, q_2]``, then the elements of ``\boldsymbol{b}`` are ``b_i = \mathrm{ModRed}[a_i, q_1, q_2]``.
 
-Furthermore, ``\mathrm{ModRed}`` can be applied to the objects of belonging to ``\mathbb{Z}_q^n \times \mathbb{Z}_q`` (in particular, [LWE ciphers](@ref)), as
+Furthermore, ``\mathrm{ModRed}`` can be applied to the objects of belonging to ``\mathbb{Z}_q^n \times \mathbb{Z}_q`` (in particular, [LWE ciphers](@ref Creating-LWEs)), as
 ```math
 \mathrm{ModRed}[(\boldsymbol{a}, b), q_1, q_2]
 = (\mathrm{ModRed}[\boldsymbol{a}, q_1, q_2], \mathrm{ModRed}[b, q_1, q_2]).
 ```
 
 
-### Flattening (``\triangleleft``)
+### [Flattening (``\triangleleft``)](@id Flattening)
 
 
 #### Integer flattening
@@ -163,7 +163,7 @@ External product acts on a two-element vector of polynomials ``\boldsymbol{v} \i
 ```
 
 
-## Scheme parameters
+## [Scheme parameters](@id Scheme-parameters-theory)
 
 *Paper:* Section 4.1.
 
@@ -385,7 +385,7 @@ Given a pair ``(U, V) \in \{0, 1\}^{n \times (t+1)} \times \{0, 1\}^{n \times 6}
 Result: an RLWE cipher ``(a(x),b(x)) \in R_{n,r}^2``.
 
 
-## Creating and decrypting LWEs
+## Creating LWEs
 
 
 ### Private key encryption to an LWE
@@ -546,12 +546,12 @@ Given a secret key ``\boldsymbol{s} \in \{0, 1\}^n``, for each ``i = 0, \dots, n
       A_{4i}(x) & B_{4i}(x)
   \end{bmatrix} + s_i G \,\mathrm{mod}\,Q.
   ```
-  where ``G`` is the gadget matrix (see [Scheme parameters](@ref)).
+  where ``G`` is the gadget matrix (see [Scheme parameters](@ref Scheme-parameters-theory)).
 
 The resulting bootstrap key is a list of ``n`` matrices of polynomials ``C^{(i)} \in R_{m,Q}^{2\ell \times n}``.
 
 
-## Bootstrap
+## [Bootstrap](@id Bootstrap-theory)
 
 *Paper:* Fig. 1.
 
@@ -583,7 +583,7 @@ Algorithm:
   A^{(i)} = G + (x^{u_i} - 1) C^{(i)} \,\mathrm{mod}\,(x^m+1, Q), \\
   (a(x), b(x)) \leftarrow (a(x), b(x)) \odot (A^{(i)}, B, \ell),
   ```
-  where G is the gadget matrix (see [Scheme parameters](@ref)).
+  where G is the gadget matrix (see [Scheme parameters](@ref Scheme-parameters-theory)).
 * Build LWEs
   ```math
   \boldsymbol{a}^{\mathrm{AND}} = (\mathrm{Extract}[\boldsymbol{a}, 3m/4], \tilde{D}_Q + b_{3m/4}), \\

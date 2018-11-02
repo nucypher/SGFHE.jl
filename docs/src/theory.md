@@ -41,7 +41,7 @@ This subsection describes some utility functions used in the FHE scheme.
 
 *Paper:* Section 4.1.
 
-*Implementation:* [`_deterministic_expand()`](@ref SGFHE._deterministic_expand)
+*Implementation:* [`prng_expand()`](@ref SGFHE.prng_expand)
 
 Pseudo-random expansion ``\mathrm{Expand}(\boldsymbol{u}, t)`` where ``\boldsymbol{u} \in \{0, 1\}^n`` produces a pseudo-random bit matrix ``\boldsymbol{V} \in \{0, 1\}^{n \times t}``, using ``\boldsymbol{u}`` as the seed. The result is converted to ``\boldsymbol{a} \in \mathbb{Z}^n`` by treating each row as the bit representation of an unsigned integer:
 ```math

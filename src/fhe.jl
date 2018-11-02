@@ -1,47 +1,34 @@
-using Primes
 using Random
 using DarkIntegers
 using DarkIntegers: AbstractRRElem
 
 
-"""
-Find a residue ring modulus `q` that:
-- `qmin <= q <= qmax`
-- `q` is prime
-- `q - 1` is a multiple of `n`
-"""
-function find_modulus(n::Int, qmin::T, qmax::Union{T, Nothing}=nothing) where T
-
-    q = zero(T)
-    j = cld(qmin - 1, n)
-
-    while true
-        q = j * n + 1
-
-        if !(qmax === nothing) && q > qmax
-            break
-        end
-
-        if isprime(q)
-            break
-        end
-
-        j += 1
-    end
-
-    if iszero(q)
-        error("Cound not find a modulus between $qmin and $qmax")
-    end
-
-    q
-end
-
-
 const SmallType = UInt64
 
 
+"""
+FHE scheme parameters.
+
+Fields
+------
+
+`n :: Int` - polynomial length.
+
+    Params(n::Int; rlwe_type=nothing, rr_type=nothing)
+
+`n`: polynomial length. Must be a power of 2, >=64.
+
+`rlwe_type`: an unsigned integer type used for bootstrapping
+             (`UInt` or `MPNumber` of a large enough size).
+
+`rr_type`: the residure ring elements representation, must be one of
+           `DarkIntegers.RRElem`, `DarkIntegers.RRElemMontgomery`
+"""
 struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
+
+    "Polynomial length"
     n :: Int
+
     r :: SmallType
     q :: SmallType
     Q :: LargeType
@@ -51,6 +38,7 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
     Dr :: SmallType
     Dq :: SmallType
     DQ_tilde :: LargeType
+
 
     function Params(n::Int; rlwe_type=nothing, rr_type=nothing)
 
@@ -122,14 +110,11 @@ function polynomial_large(params::Params{LT, RRT}, coeffs, modulus::LT) where {L
 end
 
 
-function prng_expand(seq::BitArray{1}, factor::Int)
-    # Deterministically but randomly expand `seq` `factor` times.
-    # TODO: should be done with SHAKE-128 or 256.
-    rng = Random.MersenneTwister(hash(seq))
-    rand(rng, Bool, factor, length(seq))
-end
+"""
+    PrivateKey(params::Params, rng::AbstractRNG)
 
-
+Creates the FHE private key for the FHE parameters.
+"""
 struct PrivateKey
     params :: Params
     key :: Polynomial
@@ -141,6 +126,11 @@ struct PrivateKey
 end
 
 
+"""
+    PublicKey(params::Params, rng::AbstractRNG, sk::PrivateKey)
+
+Creates the FHE public key based on the given private key.
+"""
 struct PublicKey
 
     params :: Params
@@ -165,6 +155,11 @@ struct PublicKey
 end
 
 
+"""
+    BootstrapKey(params::Params, rng::AbstractRNG, sk::PrivateKey)
+
+Creates the FHE bootstrap key based on the given private key.
+"""
 struct BootstrapKey
 
     params :: Params
@@ -225,6 +220,11 @@ struct RLWE
 end
 
 
+"""
+    extract(a::Polynomial, i::Integer, n::Integer)
+
+Extract a sub-array of length `n` from the polynomial coefficients.
+"""
 function extract(a::Polynomial, i::Integer, n::Integer)
     @assert i <= length(a)
     if i < n
@@ -236,13 +236,20 @@ function extract(a::Polynomial, i::Integer, n::Integer)
 end
 
 
+"""
+    extract_lwe(rlwe::RLWE, i::Integer, n::Integer)
+
+Extracts an LWE of length `n` from an RLWE.
+"""
 function extract_lwe(rlwe::RLWE, i::Integer, n::Integer)
     LWE(extract(rlwe.a, i, n), rlwe.b.coeffs[i])
 end
 
 
 """
-RLWE ciphertext (packed)
+A packed RLWE ciphertext encrypting an `n`-bit message
+that can be produced by an initial encryption with a private or a public key.
+Takes `2 * t * n` bits, where `t` is the bit size of the integer type used.
 """
 struct PackedCiphertext
     params :: Params
@@ -250,17 +257,31 @@ struct PackedCiphertext
 end
 
 
+"""
+An RLWE ciphertext encrypting an `n`-bit message
+that can be produced by joining together `n` [`EncryptedBit`](@ref) objects.
+Takes `16 * t * n` bits, where `t` is the bit size of the integer type used.
+"""
 struct Ciphertext
     params :: Params
     rlwe :: RLWE
 end
 
 
+"""
+An LWE ciphertext encrypting a single bit.
+"""
 struct EncryptedBit
     lwe :: LWE
 end
 
 
+"""
+    split_ciphertext(ct::Union{Ciphertext, PackedCiphertext})
+
+Splits an RLWE ciphertext (encrypting `n` bits) into `n` separate [`EncryptedBit`](@ref) objects.
+Returns an `Array{EncryptedBit, 1}`.
+"""
 function split_ciphertext(ct::Union{Ciphertext, PackedCiphertext})
     n = ct.params.n
     [EncryptedBit(extract_lwe(ct.rlwe, i, n)) for i in 1:n]
@@ -285,6 +306,10 @@ function unpackbits(arr::Array{T, 1}, itemsize::Int) where T
 end
 
 
+"""
+A space-optimal representation of `n` bits encrypted with a private key
+(taking `6n` bits in total).
+"""
 struct PrivateEncryptedCiphertext
     params :: Params
     u :: BitArray{1}
@@ -292,9 +317,9 @@ struct PrivateEncryptedCiphertext
 end
 
 
-function _deterministic_expand(params::Params, u)
-    a_bits = prng_expand(BitArray(u), params.t + 1)
-    polynomial_r(params, packbits(BigInt, a_bits), params.r)
+function deterministic_expand(params::Params, u)
+    a = prng_expand(BitArray(u), params.t + 1)
+    polynomial_r(params, a, params.r)
 end
 
 
@@ -304,7 +329,7 @@ function _encrypt_private(key::PrivateKey, rng::AbstractRNG, message::AbstractAr
     @assert length(message) == params.n
 
     u = rand(rng, Bool, params.n)
-    a = _deterministic_expand(params, u)
+    a = deterministic_expand(params, u)
 
     # TODO: Why 1/8? According to p.6 in the paper, even 1/2 should work.
     w_range = signed(div(params.Dr, 8))
@@ -317,6 +342,14 @@ function _encrypt_private(key::PrivateKey, rng::AbstractRNG, message::AbstractAr
 end
 
 
+"""
+    encrypt_optimal(key::PrivateKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
+
+Encrypts a message with the private key producing a space-optimal representation
+(6 bits per bit of the message).
+The message must have length equal to the polynomial length `n` (see [`Params.n`](@ref Params)).
+Returns a [`PrivateEncryptedCiphertext`](@ref) object.
+"""
 function encrypt_optimal(key::PrivateKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
     params = key.params
     u, rlwe = _encrypt_private(key, rng, message)
@@ -326,20 +359,39 @@ function encrypt_optimal(key::PrivateKey, rng::AbstractRNG, message::AbstractArr
 end
 
 
+"""
+    normalize_ciphertext(ct::PrivateEncryptedCiphertext)
+
+Converts a space-optimal private-encrypted ciphertext
+into a generic [`PackedCiphertext`](@ref) object.
+"""
 function normalize_ciphertext(ct::PrivateEncryptedCiphertext)
     params = ct.params
-    a = _deterministic_expand(params, ct.u)
+    a = deterministic_expand(params, ct.u)
     b = polynomial_r(params, packbits(BigInt, ct.v), params.r) * 2^(params.t - 4)
     PackedCiphertext(params, RLWE(a, b))
 end
 
 
+"""
+    encrypt(key::PrivateKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
+
+Encrypts a message with the private key. The message must have length
+equal to the polynomial length `n` (see [`Params.n`](@ref Params)).
+Returns a [`PackedCiphertext`](@ref) object.
+"""
 function encrypt(key::PrivateKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
     u, rlwe = _encrypt_private(key, rng, message)
     PackedCiphertext(key.params, rlwe)
 end
 
 
+"""
+    encrypt(key::PrivateKey, rng::AbstractRNG, message::Bool)
+
+Encrypts a single bit with the private key.
+Returns an [`EncryptedBit`](@ref) object.
+"""
 function encrypt(key::PrivateKey, rng::AbstractRNG, message::Bool)
     # TODO: This is technically not part of the original paper, but it works.
     # Consult S. Gao about this.
@@ -359,6 +411,10 @@ function encrypt(key::PrivateKey, rng::AbstractRNG, message::Bool)
 end
 
 
+"""
+A space-optimal representation of `n` bits encrypted with a public key
+(taking `(10 + log2(n))n` bits in total).
+"""
 struct PublicEncryptedCiphertext
     params :: Params
     a_bits :: BitArray{2}
@@ -393,6 +449,14 @@ function _encrypt_public(key::PublicKey, rng::AbstractRNG, message::AbstractArra
 end
 
 
+"""
+    encrypt_optimal(key::PublicKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
+
+Encrypts a message with the public key producing a space-optimal representation
+(6 bits per bit of the message).
+The message must have length equal to the polynomial length `n` (see [`Params.n`](@ref Params)).
+Returns a [`PublicEncryptedCiphertext`](@ref) object.
+"""
 function encrypt_optimal(key::PublicKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
 
     params = key.params
@@ -411,6 +475,12 @@ function encrypt_optimal(key::PublicKey, rng::AbstractRNG, message::AbstractArra
 end
 
 
+"""
+    normalize_ciphertext(ct::PublicEncryptedCiphertext)
+
+Converts a space-optimal public-encrypted ciphertext
+into a generic [`PackedCiphertext`](@ref) object.
+"""
 function normalize_ciphertext(ct::PublicEncryptedCiphertext)
     params = ct.params
     a = polynomial_r(params, packbits(BigInt, ct.a_bits), params.r)
@@ -419,11 +489,25 @@ function normalize_ciphertext(ct::PublicEncryptedCiphertext)
 end
 
 
+"""
+    encrypt(key::PublicKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
+
+Encrypts a message with the public key. The message must have length
+equal to the polynomial length `n` (see [`Params.n`](@ref Params)).
+Returns a [`PackedCiphertext`](@ref) object.
+"""
 function encrypt(key::PublicKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
     PackedCiphertext(key.params, _encrypt_public(key, rng, message))
 end
 
 
+"""
+    decrypt(key::PrivateKey, ct::PackedCiphertext)
+
+Decrypts an `n`-bit message (see [`Params.n`](@ref Params)) from a packed RLWE
+using the private key.
+Returns an `Array{Bool, 1}` object.
+"""
 function decrypt(key::PrivateKey, ct::PackedCiphertext)
     params = key.params
 
@@ -440,6 +524,13 @@ function decrypt(key::PrivateKey, ct::PackedCiphertext)
 end
 
 
+"""
+    decrypt(key::PrivateKey, ct::Ciphertext)
+
+Decrypts an `n`-bit message (see [`Params.n`](@ref Params)) from an RLWE
+using the private key.
+Returns an `Array{Bool, 1}` object.
+"""
 function decrypt(key::PrivateKey, ct::Ciphertext)
     # TODO: join with decrypt()
 
@@ -459,113 +550,26 @@ function decrypt(key::PrivateKey, ct::Ciphertext)
 end
 
 
+"""
+    decrypt(key::PrivateKey, ct::EncryptedBit)
 
+Decrypts an single-bit message from an LWE
+using the private key.
+Returns a `Bool` object.
+"""
 function decrypt(key::PrivateKey, enc_bit::EncryptedBit)
     b1 = enc_bit.lwe.b - sum(enc_bit.lwe.a .* key.key.coeffs)
     convert(Bool, div(b1 + key.params.Dr ÷ 2, key.params.Dr))
 end
 
 
-@inline @generated function zero_tuple(::Type{NTuple{N, T}}) where {N, T}
-    exprs = [:(zero(T)) for i in 1:N]
-    quote
-        tuple($(exprs...))
-    end
-end
-
-
-@inline @generated function flatten(
-        rng::Nothing,
-        a::T, ::Val{B}, l_val::Val{L}) where {B, L, T <: AbstractRRElem}
-
-    @assert typeof(B) == T
-    @assert L >= 1
-
-    # range offset
-    if isodd(B)
-        s = (B - 1) ÷ 2
-    else
-        s = B ÷ 2 - 1
-    end
-
-    pwrs = [B^i for i in 0:L-1]
-    offset = sum(pwrs) * s
-    decomp_blocks = [
-        quote
-            r, a = divrem(a, $(pwrs[i]))
-            decomp = Base.setindex(decomp, r, $i)
-        end
-        for i in L:-1:2]
-
-    quote
-        decomp = zero_tuple(NTuple{L, T})
-        a += $offset
-        $(decomp_blocks...)
-        decomp = Base.setindex(decomp, a, 1)
-
-        for i in 1:L
-            decomp = Base.setindex(decomp, decomp[i] - $s, i)
-        end
-
-        decomp
-    end
-end
-
-
-@inline @generated function flatten(
-        rng::AbstractRNG, a::T, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
-
-    if isodd(B)
-        xmax = div(B-1, 2) * convert(T, 3)
-    else
-        xmax = div(B, 2) * convert(T, 3)
-    end
-
-    # TODO: can we avoid conversion here? xmax can be larger than an Int
-    xmax_i = convert(Int, xmax)
-
-    pwrs = [B^i for i in 0:L-1]
-
-    rand_a_sub_blocks = [
-        quote
-            rand_a -= x[$i] * $(pwrs[i])
-        end
-        for i in 1:L]
-
-    quote
-        x = zero_tuple(NTuple{L, T})
-        for i in 1:L
-            x = Base.setindex(x, convert(T, rand(rng, -$xmax_i:$xmax_i)), i)
-        end
-
-        rand_a = a
-        $(rand_a_sub_blocks...)
-
-        y = flatten(nothing, rand_a, base, l)
-        for i in 1:L
-            x = Base.setindex(x, x[i] + y[i], i)
-        end
-        x
-    end
-end
-
-
-@Base.propagate_inbounds function flatten_poly(
-        rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{T}, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
-    results = [Polynomial(zeros(T, length(a)), a.negacyclic) for i in 1:L]
-    for j in 1:length(a)
-        decomp = flatten(rng, a.coeffs[j], base, l)
-        for i in 1:L
-            results[i].coeffs[j] = decomp[i]
-        end
-    end
-    results
-end
-
-
 """
-"circle with a dot" operator in the paper
+    external_product(
+        rng::Union{AbstractRNG, Nothing},
+        a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2}, base, l)
+
+``\\odot`` operator in the paper. Returns `[flatten(a); flatten(b)] * A`.
+If `rng` is `nothing`, deterministic flattening is used.
 """
 function external_product(
         rng::Union{AbstractRNG, Nothing},
@@ -643,6 +647,16 @@ function _bootstrap_internal(
 end
 
 
+"""
+    bootstrap(
+        bkey::BootstrapKey, rng::Union{AbstractRNG, Nothing},
+        enc_bit1::EncryptedBit, enc_bit2::EncryptedBit)
+
+Based on [`EncryptedBit`](@ref) objects encrypting bits `y1` and `y2`,
+produces a tuple of three [`EncryptedBit`](@ref) objects encrypting
+`y1 & y2`, `y1 | y2` and `xor(y1, y2)`.
+If `nothing` is given for `rng`, the result will be deterministic.
+"""
 function bootstrap(
         bkey::BootstrapKey, rng::Union{AbstractRNG, Nothing},
         enc_bit1::EncryptedBit, enc_bit2::EncryptedBit)
@@ -673,6 +687,15 @@ function reduce_modulus(rr_repr, rr_type, new_modulus, lwe::LWE)
 end
 
 
+"""
+    pack_encrypted_bits(
+        bkey::BootstrapKey, rng::Union{AbstractRNG, Nothing},
+        enc_bits::AbstractArray{EncryptedBit, 1})
+
+Converts an array of `n` [`EncryptedBit`](@ref) objects (see [`Params.n`](@ref Params))
+into an RLWE [`Ciphertext`](@ref).
+If `nothing` is given for `rng`, the result will be deterministic.
+"""
 function pack_encrypted_bits(
         bkey::BootstrapKey, rng::Union{AbstractRNG, Nothing},
         enc_bits::AbstractArray{EncryptedBit, 1})

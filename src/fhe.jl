@@ -565,24 +565,15 @@ end
 
 
 """
-"triangle G" operator in the paper
-"""
-function decompose(
-        rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{T}, b::Polynomial{T}, base, l) where T <: AbstractRRElem
-    a_decomp = flatten_poly(rng, a, base, l)
-    b_decomp = flatten_poly(rng, b, base, l)
-    [a_decomp; b_decomp]
-end
-
-
-"""
 "circle with a dot" operator in the paper
 """
 function external_product(
         rng::Union{AbstractRNG, Nothing},
         a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2}, base, l) where T
-    u = decompose(rng, a, b, base, l)
+
+    a_decomp = flatten_poly(rng, a, base, l)
+    b_decomp = flatten_poly(rng, b, base, l)
+    u = [a_decomp; b_decomp]
     a_res = sum(u .* A[:,1])
     b_res = sum(u .* A[:,2])
     a_res, b_res

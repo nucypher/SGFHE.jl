@@ -1,6 +1,6 @@
 using DarkIntegers
 using SGFHE
-using SGFHE: flatten, polynomial_large, decompose, external_product
+using SGFHE: flatten, flatten_poly, polynomial_large, external_product
 
 
 @testgroup "Internals" begin
@@ -65,7 +65,7 @@ using SGFHE: flatten, polynomial_large, decompose, external_product
     end)
 
 
-@testcase "decompose()" for use_rng in ([false, true] => ["deterministic", "random"])
+@testcase "flatten_poly()" for use_rng in ([false, true] => ["deterministic", "random"])
     p = Params(64; rr_type=RRElem)
 
     B = typeof(p.B)(10) # p.B
@@ -75,7 +75,6 @@ using SGFHE: flatten, polynomial_large, decompose, external_product
     q = B^l - one(typeof(B))
     q_bi = BigInt(q)
     a = polynomial_large(p, rand(Int128, p.n), q)
-    b = polynomial_large(p, rand(Int128, p.n), q)
 
     poly_type = eltype(a.coeffs)
 
@@ -86,18 +85,16 @@ using SGFHE: flatten, polynomial_large, decompose, external_product
 
     rng = use_rng ? MersenneTwister() : nothing
 
-    u = decompose(rng, a, b, b_val, ll)
+    u = flatten_poly(rng, a, b_val, ll)
 
     for x in u
         coeffs = convert.(BigInt, x.coeffs)
         @test all(c <= 2 * B_bi || c >= q_bi - 2 * B_bi for c in coeffs)
     end
 
-    a_restored = sum(u[1:l] .* B_m.^(0:l-1))
-    b_restored = sum(u[l+1:end] .* B_m.^(0:l-1))
+    a_restored = sum(u .* B_m.^(0:l-1))
 
     @test a == a_restored
-    @test b == b_restored
 end
 
 

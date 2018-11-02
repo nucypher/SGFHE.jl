@@ -3,7 +3,7 @@ using BenchmarkTools: prettytime, prettymemory
 using Random
 
 using SGFHE
-using SGFHE: flatten, decompose, external_product
+using SGFHE: flatten, external_product
 using DarkIntegers
 
 

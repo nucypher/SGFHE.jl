@@ -14,10 +14,10 @@ makedocs(
         "Theory" => "theory.md",
         "Version history" => "history.md",
     ],
+    html_prettyurls = false,
 )
 
 deploydocs(
-    julia = "nightly",
     repo = "github.com/nucypher/SGFHE.jl.git",
     target = "build",
     deps = nothing,

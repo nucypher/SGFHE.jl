@@ -245,7 +245,7 @@ Algorithm:
 Result: an RLWE cipher ``(a(x),b(x)) \in R_{n,r}^2``.
 
 
-### Space-optimal representation
+### [Space-optimal representation](@id Space-optimal-representation-private)
 
 *Paper:* Fig. 2.
 

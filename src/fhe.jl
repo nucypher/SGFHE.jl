@@ -204,6 +204,10 @@ struct LWE{T <: AbstractRRElem}
 end
 
 
+# This is mainly used for illustration in the manual.
+Base.:(==)(lwe1::LWE, lwe2::LWE) = lwe1.a == lwe2.a && lwe1.b == lwe2.b
+
+
 function Base.:+(l1::LWE, l2::LWE)
     LWE(l1.a .+ l2.a, l1.b + l2.b)
 end
@@ -274,6 +278,10 @@ An LWE ciphertext encrypting a single bit.
 struct EncryptedBit
     lwe :: LWE
 end
+
+
+# This is mainly used for illustration in the manual.
+Base.:(==)(a::EncryptedBit, b::EncryptedBit) = a.lwe == b.lwe
 
 
 """

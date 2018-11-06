@@ -96,17 +96,17 @@ end
 
 
 function polynomial_r(params::Params, coeffs, modulus::SmallType)
-    Polynomial(RRElem{SmallType, modulus}.(coeffs), true)
+    Polynomial(convert.(RRElem{SmallType, modulus}, coeffs), true)
 end
 
 
 function polynomial_small(params::Params{LT, RRT}, coeffs, modulus::SmallType) where {LT, RRT}
-    Polynomial(RRT{SmallType, modulus}.(coeffs), true)
+    Polynomial(convert.(RRT{SmallType, modulus}, coeffs), true)
 end
 
 
 function polynomial_large(params::Params{LT, RRT}, coeffs, modulus::LT) where {LT, RRT}
-    Polynomial(RRT{LT, modulus}.(coeffs), true)
+    Polynomial(convert.(RRT{LT, modulus}, coeffs), true)
 end
 
 

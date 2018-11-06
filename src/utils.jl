@@ -1,7 +1,7 @@
 using Primes
 using Random
 using DarkIntegers
-using DarkIntegers: change_base_type, rr_base_type, rr_modulus, rr_value
+using DarkIntegers: change_base_type, rr_base_type, rr_modulus, rr_value, _no_conversion
 
 
 """
@@ -53,7 +53,7 @@ end
 
 
 @inline function change_modulus_unsafe(new_modulus::Unsigned, x::RRElem{T, M}) where {T, M}
-    RRElem(x.value, convert(T, new_modulus))
+    RRElem(x.value, convert(T, new_modulus), _no_conversion)
 end
 
 @inline function change_modulus_unsafe(
@@ -88,7 +88,8 @@ end
 @inline function change_modulus_proportional(new_modulus::Unsigned, x::RRElem{T, M}) where {T, M}
     RRElem(
         change_modulus_proportional(new_modulus, rr_value(x), rr_modulus(x)),
-        convert(T, new_modulus))
+        convert(T, new_modulus),
+        _no_conversion)
 end
 
 

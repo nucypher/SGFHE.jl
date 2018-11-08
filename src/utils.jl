@@ -1,7 +1,7 @@
 using Primes
 using Random
 using DarkIntegers
-using DarkIntegers: change_base_type, rr_base_type, rr_modulus, rr_value, _no_conversion
+using DarkIntegers: change_representation, change_modulus_proportional, change_base_type
 
 
 """
@@ -49,47 +49,6 @@ function prng_expand(seq::BitArray{1}, factor::Int)
     rng = MersenneTwister(hash(seq))
     bits = rand(rng, Bool, factor, length(seq))
     packbits(BigInt, bits)
-end
-
-
-@inline function change_modulus_unsafe(new_modulus::Unsigned, x::RRElem{T, M}) where {T, M}
-    RRElem(x.value, convert(T, new_modulus), _no_conversion)
-end
-
-@inline function change_modulus_unsafe(
-        new_modulus::Unsigned, p::Polynomial{T}) where T <: AbstractRRElem
-    nm = convert(rr_base_type(T), new_modulus) # so that it is not converted for each element separately
-    Polynomial(change_modulus_unsafe.(nm, p.coeffs), p.negacyclic)
-end
-
-
-@inline function change_representation(new_repr, x::T) where T <: AbstractRRElem
-    base_tp = rr_base_type(T)
-    modulus = rr_modulus(T)
-    convert(new_repr{base_tp, modulus}, x)
-end
-
-@inline function change_representation(new_repr, p::Polynomial)
-    Polynomial(change_representation.(new_repr, p.coeffs), p.negacyclic)
-end
-
-
-@inline function change_modulus_proportional(
-        new_modulus::Unsigned, x::T, old_modulus::T) where T <: Unsigned
-
-    # TODO: optimize
-    xi = convert(BigInt, x)
-    mi = convert(BigInt, old_modulus)
-
-    # TODO: make it a purely integer algorithm
-    convert(T, round(BigInt, xi * new_modulus / mi))
-end
-
-@inline function change_modulus_proportional(new_modulus::Unsigned, x::RRElem{T, M}) where {T, M}
-    RRElem(
-        change_modulus_proportional(new_modulus, rr_value(x), rr_modulus(x)),
-        convert(T, new_modulus),
-        _no_conversion)
 end
 
 

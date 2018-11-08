@@ -1,6 +1,6 @@
 using Random
 using DarkIntegers
-using DarkIntegers: AbstractRRElem
+using DarkIntegers: AbstractRRElem, change_modulus
 
 
 const SmallType = UInt64
@@ -147,7 +147,7 @@ struct PublicKey
         e_max = cld(params.Dq, 41 * params.n) - 1
         e = polynomial_small(params, rand(rng, 0:2*e_max, params.n), params.q) - e_max
 
-        key_q = change_representation(RRT, change_modulus_unsafe(params.q, sk.key))
+        key_q = change_representation(RRT, change_modulus(params.q, sk.key))
         k1 = k0 * key_q + e
 
         new(params, k0, k1)

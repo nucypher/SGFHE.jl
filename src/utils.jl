@@ -52,15 +52,6 @@ function prng_expand(seq::BitArray{1}, factor::Int)
 end
 
 
-@inline function reduce_modulus(
-        new_repr, new_base_type, new_modulus::Unsigned, x::T) where T <: AbstractRRElem
-    x_rr = change_representation(RRElem, x)
-    x_cm = change_modulus_proportional(new_modulus, x_rr)
-    x_ct = change_base_type(new_base_type, x_cm)
-    change_representation(new_repr, x_ct)
-end
-
-
 """
     function reduce_modulus(
         new_repr, new_base_type, new_modulus::Unsigned, p::Polynomial{<:AbstractRRElem})
@@ -69,14 +60,14 @@ Reduces the modulus of all coefficients of a polynomial, simultaneously casting 
 to the residue ring representation `new_repr` and type `new_base_type`.
 """
 @inline function reduce_modulus(
-        new_repr, new_base_type, new_modulus::Unsigned, p::Polynomial{T}) where T <: AbstractRRElem
-    nm = convert(rr_base_type(T), new_modulus)
-    Polynomial(reduce_modulus.(new_repr, new_base_type, nm, p.coeffs), p.negacyclic)
-end
-
-
-@inline function change_length(new_length, p::Polynomial{T}) where T
-    Polynomial([p.coeffs; zeros(T, new_length - length(p))], p.negacyclic)
+        new_repr, new_base_type, new_modulus::Unsigned,
+        x::Union{T, Polynomial{T}}) where T <: AbstractRRElem
+    # Change representation to the regular residue ring element first
+    # to avoid conversions during division.
+    x_rr = change_representation(RRElem, x)
+    x_cm = change_modulus_proportional(new_modulus, x_rr)
+    x_ct = change_base_type(new_base_type, x_cm)
+    change_representation(new_repr, x_ct)
 end
 
 

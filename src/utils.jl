@@ -10,30 +10,27 @@ Find a residue ring modulus `q` that:
 - `q` is prime
 - `q - 1` is a multiple of `n`
 """
-function find_modulus(n::Int, qmin::T, qmax::Union{T, Nothing}=nothing) where T
+function find_modulus(n::T, qmin::T, qmax::Union{T, Nothing}=nothing) where T
 
     q = zero(T)
-    j = cld(qmin - 1, n)
+    j = cld(qmin - one(T), n)
 
     while true
-        q = j * n + 1
+        q = j * n + one(T)
 
         if !(qmax === nothing) && q > qmax
             break
         end
 
         if isprime(q)
-            break
+            return q
         end
 
-        j += 1
+        j += one(T)
     end
 
-    if iszero(q)
-        error("Cound not find a modulus between $qmin and $qmax")
-    end
-
-    q
+    error("Cound not find a modulus between $qmin and $qmax")
+    zero(T) # to force the fixed return type
 end
 
 

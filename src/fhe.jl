@@ -46,21 +46,25 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
         @assert 2^log2(n) == n
         @assert rr_type in (nothing, RRElem, RRElemMontgomery)
 
-        r = 16n
+        # All parameters are calculated as BigInts to avoid overflow.
+        # Then we check that they actually fit into requested types.
+
+        big_n = BigInt(n)
+        r = big_n * 16
 
         # `q-1` will be a multiple of `2n`,
         # meaning that NTT can be used for the multiplication of polynomials of length `n`.
-        q = find_modulus(2n, BigInt(r * n))
+        q = find_modulus(2big_n, r * big_n)
 
         @assert sizeof(SmallType) * 8 > log2(q)
 
         t = Int(log2(r)) - 1
         m = div(r, 2)
 
-        Qmin = BigInt(r)^4 * n^2 * 1220
-        Qmax = BigInt(r)^4 * n^2 * 1225
+        Qmin = r^4 * big_n^2 * 1220
+        Qmax = r^4 * big_n^2 * 1225
 
-        # `q-1` will be a multiple of `2m`,
+        # `Q-1` will be a multiple of `2m`,
         # meaning that NTT can be used for the multiplication of polynomials of length `m`.
         Q = find_modulus(2m, Qmin, Qmax)
 
@@ -70,7 +74,7 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
             elseif log2(Q) <= 128
                 rlwe_type = UInt128
             else
-                error()
+                error("n=$n is too large")
             end
         else
             @assert sizeof(rlwe_type) * 8 > log2(Q)
@@ -80,10 +84,10 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
             rr_type = RRElemMontgomery
         end
 
-        B = BigInt(35) * r^2 * n
-        Dr = div(r, 4) # `floor` in the paper, but since r > 0 it is the same
-        Dq = div(q, 4) # see above
-        DQ_tilde = div(Q, 8) # see above
+        B = r^2 * n * 35
+        Dr = div(r, 4)
+        Dq = div(q, 4)
+        DQ_tilde = div(Q, 8)
 
         new{rlwe_type, rr_type}(
             n, r, q,

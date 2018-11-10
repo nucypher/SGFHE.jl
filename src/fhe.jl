@@ -308,10 +308,10 @@ function split_ciphertext(ct::Union{Ciphertext, PackedCiphertext})
 end
 
 
-function packbits(tp::Type, bits::Union{Array{Bool, 2}, BitArray{2}})
-    result = zeros(tp, size(bits, 2))
+function packbits(::Type{T}, bits::Union{Array{Bool, 2}, BitArray{2}}) where T
+    result = zeros(T, size(bits, 2))
     for i in 1:size(bits, 1)
-        result .+= tp.(bits[i,:]) * 2^(i-1)
+        result .+= T.(bits[i,:]) * 2^(i-1)
     end
     result
 end

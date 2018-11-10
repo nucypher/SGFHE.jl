@@ -60,7 +60,7 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
         Qmin = BigInt(r)^4 * n^2 * 1220
         Qmax = BigInt(r)^4 * n^2 * 1225
 
-        # `q-1` will be a multiple of `2n`,
+        # `q-1` will be a multiple of `2m`,
         # meaning that NTT can be used for the multiplication of polynomials of length `m`.
         Q = find_modulus(2m, Qmin, Qmax)
 

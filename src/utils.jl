@@ -37,6 +37,24 @@ function find_modulus(n::Int, qmin::T, qmax::Union{T, Nothing}=nothing) where T
 end
 
 
+function packbits(::Type{T}, bits::Union{Array{Bool, 2}, BitArray{2}}) where T
+    result = zeros(T, size(bits, 2))
+    for i in 1:size(bits, 1)
+        result .+= T.(bits[i,:]) * 2^(i-1)
+    end
+    result
+end
+
+
+function unpackbits(arr::Array{T, 1}, itemsize::Int) where T
+    result = Array{Bool}(undef, itemsize, length(arr))
+    for i in 1:itemsize
+        result[i,:] = Array(arr .& 2^(i-1) .> 0)
+    end
+    result
+end
+
+
 """
     prng_expand(seq::BitArray{1}, factor::Int)
 

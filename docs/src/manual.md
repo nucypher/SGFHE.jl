@@ -95,7 +95,7 @@ At the moment one can only use a public key to encrypt arrays of bits:
 rng = MersenneTwister()
 params = Params(64)
 key = PrivateKey(params, rng)
-pkey = PublicKey(params, rng, key)
+pkey = PublicKey(rng, key)
 
 bits = rand(Bool, params.n)
 encrypted_bits = encrypt(pkey, rng, bits)
@@ -112,7 +112,7 @@ Similarly to the private key encrpytion, one can use an intermediate space-effic
 rng = MersenneTwister()
 params = Params(64)
 key = PrivateKey(params, rng)
-pkey = PublicKey(params, rng, key)
+pkey = PublicKey(rng, key)
 
 bits = rand(Bool, params.n)
 encrypted_array = encrypt_optimal(pkey, rng, bits)
@@ -136,7 +136,7 @@ Bootstrapping procedure requires a special bootstrap key, which can be generated
 rng = MersenneTwister()
 params = Params(64)
 key = PrivateKey(params, rng)
-bkey = BootstrapKey(params, rng, key)
+bkey = BootstrapKey(rng, key)
 
 y1 = true
 y2 = false
@@ -183,7 +183,7 @@ Such ciphertexts can be split into encrypted bits to use in [`bootstrap`](@ref) 
 rng = MersenneTwister()
 params = Params(64)
 key = PrivateKey(params, rng)
-bkey = BootstrapKey(params, rng, key)
+bkey = BootstrapKey(rng, key)
 
 bits = rand(Bool, params.n)
 encrypted_array = encrypt(key, rng, bits)
@@ -221,7 +221,7 @@ The packing function uses the bootstrap key:
 rng = MersenneTwister()
 params = Params(64)
 key = PrivateKey(params, rng)
-bkey = BootstrapKey(params, rng, key)
+bkey = BootstrapKey(rng, key)
 
 bits = rand(Bool, params.n)
 encrypted_array = encrypt(key, rng, bits)

@@ -121,7 +121,7 @@ for use_rng in ([false, true] => ["deterministic", "random"])
 
     params = Params(64)
     key = PrivateKey(params, rng)
-    bkey = BootstrapKey(params, rng, key)
+    bkey = BootstrapKey(rng, key)
 
     message = rand(Bool, params.n)
     ct = encrypt(key, rng, message)

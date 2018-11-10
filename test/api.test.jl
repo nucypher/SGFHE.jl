@@ -22,7 +22,7 @@ end
     params = Params(512)
     message = rand(rng, Bool, params.n)
     key = PrivateKey(params, rng)
-    pkey = PublicKey(params, rng, key)
+    pkey = PublicKey(rng, key)
     public_ct = encrypt_optimal(pkey, rng, message)
     packed_ct = normalize_ciphertext(public_ct)
     decrypted = decrypt(key, packed_ct)
@@ -67,7 +67,7 @@ for use_rng in ([false, true] => ["deterministic", "random"]),
     rng = MersenneTwister()
     params = Params(64)
     key = PrivateKey(params, rng)
-    bkey = BootstrapKey(params, rng, key)
+    bkey = BootstrapKey(rng, key)
 
     message = rand(rng, Bool, params.n)
 
@@ -113,7 +113,7 @@ end)
 
     message = rand(Bool, params.n)
     key = PrivateKey(params, rng)
-    bkey = BootstrapKey(params, rng, key)
+    bkey = BootstrapKey(rng, key)
     ct = encrypt(key, rng, message)
 
     enc_bits = split_ciphertext(ct)

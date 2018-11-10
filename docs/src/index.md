@@ -14,7 +14,7 @@ using SGFHE
 rng = MersenneTwister()
 params = Params(64)
 key = PrivateKey(params, rng)
-bkey = BootstrapKey(params, rng, key)
+bkey = BootstrapKey(rng, key)
 
 y1 = true
 y2 = false

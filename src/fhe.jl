@@ -95,6 +95,12 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
 end
 
 
+rr_representation(::Params{LT, RRT}) where {LT, RRT} = RRT
+
+
+large_type(::Params{LT, RRT}) where {LT, RRT} = LT
+
+
 function polynomial_r(params::Params, coeffs, modulus::SmallType)
     Polynomial(convert.(RRElem{SmallType, modulus}, coeffs), true)
 end
@@ -127,7 +133,7 @@ end
 
 
 """
-    PublicKey(params::Params, rng::AbstractRNG, sk::PrivateKey)
+    PublicKey(rng::AbstractRNG, sk::PrivateKey)
 
 Creates the FHE public key based on the given private key.
 """
@@ -137,7 +143,7 @@ struct PublicKey
     k0 :: Polynomial
     k1 :: Polynomial
 
-    function PublicKey(params::Params{LT, RRT}, rng::AbstractRNG, sk::PrivateKey) where {LT, RRT}
+    function PublicKey(rng::AbstractRNG, sk::PrivateKey)
 
         params = sk.params
 
@@ -147,7 +153,9 @@ struct PublicKey
         e_max = cld(params.Dq, 41 * params.n) - 1
         e = polynomial_small(params, rand(rng, 0:2*e_max, params.n), params.q) - e_max
 
-        key_q = change_representation(RRT, change_modulus(params.q, sk.key))
+        rr_repr = rr_representation(params)
+
+        key_q = change_representation(rr_repr, change_modulus(params.q, sk.key))
         k1 = k0 * key_q + e
 
         new(params, k0, k1)
@@ -156,7 +164,7 @@ end
 
 
 """
-    BootstrapKey(params::Params, rng::AbstractRNG, sk::PrivateKey)
+    BootstrapKey(rng::AbstractRNG, sk::PrivateKey)
 
 Creates the FHE bootstrap key based on the given private key.
 """
@@ -165,9 +173,13 @@ struct BootstrapKey
     params :: Params
     key :: Array{Array{Polynomial, 2}, 1}
 
-    function BootstrapKey(params::Params{LT, RRT}, rng::AbstractRNG, sk::PrivateKey) where {LT, RRT}
+    function BootstrapKey(rng::AbstractRNG, sk::PrivateKey) where {LT, RRT}
 
-        ptp = RRT{LT, params.Q}
+        params = sk.params
+
+        rr_repr = rr_representation(params)
+        large_tp = large_type(params)
+        ptp = rr_repr{large_tp, params.Q}
 
         key_coeffs = [sk.key.coeffs; zeros(eltype(sk.key.coeffs), params.m - params.n)]
         ext_key = polynomial_large(params, key_coeffs, params.Q)

@@ -43,12 +43,12 @@ end
 Expands a sequence of `n` bits into a pseudo-random array of `n * factor` bits deterministically,
 representing each `factor` bits as an integer.
 """
-function prng_expand(seq::BitArray{1}, factor::Int)
+function prng_expand(::Type{T}, seq::BitArray{1}, factor::Int) where T
     # Deterministically but randomly expand `seq` `factor` times.
     # TODO: should be done with SHAKE-128 or 256.
     rng = MersenneTwister(hash(seq))
     bits = rand(rng, Bool, factor, length(seq))
-    packbits(BigInt, bits)
+    packbits(T, bits)
 end
 
 

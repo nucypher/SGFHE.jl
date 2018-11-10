@@ -338,7 +338,7 @@ end
 
 
 function deterministic_expand(params::Params, u)
-    a = prng_expand(BitArray(u), params.t + 1)
+    a = prng_expand(SmallType, BitArray(u), params.t + 1)
     polynomial_r(params, a, params.r)
 end
 

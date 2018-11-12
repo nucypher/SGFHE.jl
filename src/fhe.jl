@@ -21,7 +21,7 @@ Fields
 `rlwe_type`: an unsigned integer type used for bootstrapping
              (`UInt` or `MPNumber` of a large enough size).
 
-`rr_type`: the residure ring elements representation, must be one of
+`rr_repr`: the residue ring elements representation, must be one of
            `DarkIntegers.RRElem`, `DarkIntegers.RRElemMontgomery`
 """
 struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}

@@ -501,8 +501,7 @@ function decrypt(key::PrivateKey, ct::PackedCiphertext)
     # div(x + Dr/2, Dr) is equivalent to round(x / Dr),
     # but unlike it works well with the modulo values
     # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
-    # TODO: remove type hardcoding
-    b1_coeffs = convert.(UInt64, b1.coeffs .+ div(params.Dr, 2))
+    b1_coeffs = convert.(SmallType, b1.coeffs .+ params.Dr ÷ 2)
 
     convert.(Bool, div.(b1_coeffs, params.Dr))
 end
@@ -527,8 +526,7 @@ function decrypt(key::PrivateKey, ct::Ciphertext)
     # div(x + Dr/2, Dr) is equivalent to round(x / Dr),
     # but unlike it works well with the modulo values
     # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
-    # TODO: remove type hardcoding
-    b1_coeffs = convert.(UInt64, b1.coeffs .+ div(params.Dr, 2))
+    b1_coeffs = convert.(SmallType, b1.coeffs .+ params.Dr ÷ 2)
 
     convert.(Bool, div.(b1_coeffs[1:params.n], params.Dr))
 end

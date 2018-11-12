@@ -341,7 +341,7 @@ function encrypt_optimal(key::PrivateKey, rng::AbstractRNG, message::AbstractArr
     params = key.params
     u, rlwe = _encrypt_private(key, rng, message)
     b_packed = div(rlwe.b, 2^(params.t - 4))
-    v = unpackbits(convert.(BigInt, b_packed.coeffs), 5)
+    v = unpackbits(convert.(SmallType, b_packed.coeffs), 5)
     PrivateEncryptedCiphertext(params, BitArray(u), BitArray(v))
 end
 
@@ -355,7 +355,7 @@ into a generic [`PackedCiphertext`](@ref) object.
 function normalize_ciphertext(ct::PrivateEncryptedCiphertext)
     params = ct.params
     a = deterministic_expand(params, ct.u)
-    b = polynomial_r(params, packbits(BigInt, ct.v)) * 2^(params.t - 4)
+    b = polynomial_r(params, packbits(SmallType, ct.v)) * 2^(params.t - 4)
     PackedCiphertext(params, RLWE(a, b))
 end
 
@@ -453,10 +453,10 @@ function encrypt_optimal(key::PublicKey, rng::AbstractRNG, message::AbstractArra
     # Only upper 6 bits of rlwe.b are important.
     # So we need to save (t + 1) == log2(r) bits of rlwe.a and 6 bits or rlwe.b
 
-    a_bits = unpackbits(convert.(BigInt, rlwe.a.coeffs), params.t + 1)
+    a_bits = unpackbits(convert.(SmallType, rlwe.a.coeffs), params.t + 1)
 
     b_packed = div(rlwe.b, 2^(params.t - 5))
-    b_bits = unpackbits(convert.(BigInt, b_packed.coeffs), 6)
+    b_bits = unpackbits(convert.(SmallType, b_packed.coeffs), 6)
 
     PublicEncryptedCiphertext(params, a_bits, b_bits)
 end
@@ -470,8 +470,8 @@ into a generic [`PackedCiphertext`](@ref) object.
 """
 function normalize_ciphertext(ct::PublicEncryptedCiphertext)
     params = ct.params
-    a = polynomial_r(params, packbits(BigInt, ct.a_bits))
-    b = polynomial_r(params, packbits(BigInt, ct.b_bits)) * 2^(params.t - 5)
+    a = polynomial_r(params, packbits(SmallType, ct.a_bits))
+    b = polynomial_r(params, packbits(SmallType, ct.b_bits)) * 2^(params.t - 5)
     PackedCiphertext(params, RLWE(a, b))
 end
 

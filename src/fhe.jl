@@ -183,17 +183,14 @@ struct BootstrapKey
 
         ext_key = change_length(params.m, polynomial_Q(params, sk.key))
 
+        tp = encompassing_type(type_Q(params))
+        range_Q = zero(tp):convert(tp, params.Q)-one(tp)
+
         G = gadget_matrix(params)
         bkey = Array{Array{typeof(ext_key), 2}, 1}(undef, params.n)
         for i in 1:params.n
-
-            # TODO: add rand() support for RadixInteger
-            aj = [polynomial_Q(
-                params,
-                rand(rng, BigInt(0):convert(BigInt, params.Q)-1, params.m)) for j in 1:4]
-            ej = [polynomial_Q(
-                params,
-                rand(rng, -params.n:params.n, params.m)) for j in 1:4]
+            aj = [polynomial_Q(params, rand(rng, range_Q, params.m)) for j in 1:4]
+            ej = [polynomial_Q(params, rand(rng, -params.n:params.n, params.m)) for j in 1:4]
             bj = [aj[j] * ext_key + ej[j] for j in 1:4]
             C = [aj[1] bj[1]; aj[2] bj[2]; aj[3] bj[3]; aj[4] bj[4]] .+ ext_key.coeffs[i] * G
             bkey[i] = C

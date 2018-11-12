@@ -6,6 +6,25 @@ using SGFHE: flatten, flatten_poly, polynomial_large, external_product
 @testgroup "Internals" begin
 
 
+function decomposition_limits(B::T, q::T, use_rng::Bool) where T
+    if use_rng
+        s = 2 * B
+        lim_lo = q - s
+        lim_hi = s
+    else
+        if isodd(B)
+            s = (B - 1) ÷ 2
+        else
+            s = B ÷ 2 - 1
+        end
+        lim_lo = q - s
+        lim_hi = B - s - 1
+    end
+
+    T(lim_lo), T(lim_hi)
+end
+
+
 @testcase(
     "flatten()",
     for rrtp in [RRElem, RRElemMontgomery],
@@ -24,21 +43,8 @@ using SGFHE: flatten, flatten_poly, polynomial_large, external_product
         modulus = UInt16(q)
         tp = rrtp{UInt16, modulus}
 
-        if use_rng
-            rng = MersenneTwister()
-            s = 2 * B
-            lim_lo = convert(tp, q - s)
-            lim_hi = convert(tp, s)
-        else
-            rng = nothing
-            if isodd(B)
-                s = (B - 1) ÷ 2
-            else
-                s = B ÷ 2 - 1
-            end
-            lim_lo = convert(tp, q - s)
-            lim_hi = convert(tp, B - s - 1)
-        end
+        lim_lo, lim_hi = decomposition_limits(B, q, use_rng)
+        rng = use_rng ? MersenneTwister() : nothing
 
         B_rr = convert(tp, B)
         base = Val(B_rr)
@@ -83,13 +89,14 @@ using SGFHE: flatten, flatten_poly, polynomial_large, external_product
     ll = Val(l)
     b_val = Val(B_m)
 
+    lim_lo, lim_hi = decomposition_limits(B_bi, q_bi, use_rng)
     rng = use_rng ? MersenneTwister() : nothing
 
     u = flatten_poly(rng, a, b_val, ll)
 
     for x in u
         coeffs = convert.(BigInt, x.coeffs)
-        @test all(c <= 2 * B_bi || c >= q_bi - 2 * B_bi for c in coeffs)
+        @test all(c <= lim_hi || c >= lim_lo for c in coeffs)
     end
 
     a_restored = sum(u .* B_m.^(0:l-1))

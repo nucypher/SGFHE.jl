@@ -666,6 +666,7 @@ function pack_encrypted_bits(
         enc_bits::AbstractArray{EncryptedBit, 1})
 
     params = bkey.params
+    ptp = type_Q(params)
 
     @assert length(enc_bits) == params.n
 
@@ -675,16 +676,10 @@ function pack_encrypted_bits(
 
     new_lwes = [_bootstrap_internal(bkey, rng, enc_trivial, enc_bit)[1] for enc_bit in enc_bits]
 
-    ptp = eltype(new_lwes[1].a)
-
     as = [
-        change_length(
-            params.m,
-            Polynomial([new_lwes[j].a[i] for j in 1:params.n], true))
+        change_length(params.m, Polynomial([new_lwes[j].a[i] for j in 1:params.n], true))
         for i in 1:params.n]
-    b = change_length(
-            params.m,
-            Polynomial([new_lwe.b for new_lwe in new_lwes], true))
+    b = change_length(params.m, Polynomial([new_lwe.b for new_lwe in new_lwes], true))
 
     B_m = ptp(params.B)
     base = Val(B_m)

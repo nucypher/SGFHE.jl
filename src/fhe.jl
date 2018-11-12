@@ -486,49 +486,35 @@ end
 
 
 """
-    decrypt(key::PrivateKey, ct::PackedCiphertext)
-
-Decrypts an `n`-bit message (see [`Params.n`](@ref Params)) from a packed RLWE
-using the private key.
-Returns an `Array{Bool, 1}` object.
-"""
-function decrypt(key::PrivateKey, ct::PackedCiphertext)
-    params = key.params
-
-    b1 = ct.rlwe.b - key.key * ct.rlwe.a
-
-    # Plus half-interval (Dr) to "snap" to the values 0, Dr, 2Dr, ...
-    # `(x + Dr/2) ÷ Dr` is equivalent to `round(x / Dr)`,
-    # but unlike it works well with the modulo values
-    # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
-    b1_coeffs = convert.(SmallType, b1.coeffs .+ params.Dr ÷ 2)
-
-    convert.(Bool, b1_coeffs .÷ params.Dr)
-end
-
-
-"""
-    decrypt(key::PrivateKey, ct::Ciphertext)
+    decrypt(key::PrivateKey, ct::Union{Ciphertext, PackedCiphertext})
 
 Decrypts an `n`-bit message (see [`Params.n`](@ref Params)) from an RLWE
 using the private key.
 Returns an `Array{Bool, 1}` object.
 """
-function decrypt(key::PrivateKey, ct::Ciphertext)
-    # TODO: join with decrypt()
-
+function decrypt(key::PrivateKey, ct::Union{Ciphertext, PackedCiphertext})
     params = key.params
 
-    key = change_length(params.m, key.key)
-    b1 = ct.rlwe.b - key * ct.rlwe.a
+    if typeof(ct) == Ciphertext
+        key_poly = change_length(params.m, key.key)
+    else
+        key_poly = key.key
+    end
+    b1 = ct.rlwe.b - key_poly * ct.rlwe.a
+
+    if typeof(ct) == Ciphertext
+        b1_coeffs = b1.coeffs[1:params.n]
+    else
+        b1_coeffs = b1.coeffs
+    end
 
     # Plus half-interval (Dr) to "snap" to the values 0, Dr, 2Dr, ...
     # `(x + Dr/2) ÷ Dr` is equivalent to `round(x / Dr)`,
     # but unlike it works well with the modulo values
     # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
-    b1_coeffs = convert.(SmallType, b1.coeffs .+ params.Dr ÷ 2)
+    b1_coeffs_snapped = convert.(SmallType, b1_coeffs .+ params.Dr ÷ 2)
 
-    convert.(Bool, b1_coeffs[1:params.n] .÷ params.Dr)
+    convert.(Bool, b1_coeffs_snapped .÷ params.Dr)
 end
 
 

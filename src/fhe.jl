@@ -99,24 +99,26 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
 end
 
 
-rr_representation(::Params{LT, RRT}) where {LT, RRT} = RRT
+type_r(params::Params{LT, RRT}) where {LT, RRT} = RRElem{SmallType, params.r}
+type_q(params::Params{LT, RRT}) where {LT, RRT} = RRT{SmallType, params.q}
+type_Q(params::Params{LT, RRT}) where {LT, RRT} = RRT{LT, params.Q}
 
 
-large_type(::Params{LT, RRT}) where {LT, RRT} = LT
+polynomial_r(params::Params, coeffs::AbstractArray) =
+    Polynomial(convert.(type_r(params), coeffs), true)
+polynomial_q(params::Params, coeffs::AbstractArray) =
+    Polynomial(convert.(type_q(params), coeffs), true)
+polynomial_q(params::Params, p::Polynomial) =
+    Polynomial(convert.(type_q(params), p.coeffs), true)
+polynomial_Q(params::Params, coeffs) =
+    Polynomial(convert.(type_Q(params), coeffs), true)
+polynomial_Q(params::Params, p::Polynomial) =
+    Polynomial(convert.(type_Q(params), p.coeffs), true)
 
 
-function polynomial_r(params::Params, coeffs, modulus::SmallType)
-    Polynomial(convert.(RRElem{SmallType, modulus}, coeffs), true)
-end
-
-
-function polynomial_small(params::Params{LT, RRT}, coeffs, modulus::SmallType) where {LT, RRT}
-    Polynomial(convert.(RRT{SmallType, modulus}, coeffs), true)
-end
-
-
-function polynomial_large(params::Params{LT, RRT}, coeffs, modulus::LT) where {LT, RRT}
-    Polynomial(convert.(RRT{LT, modulus}, coeffs), true)
+function gadget_matrix(params::Params)
+    tp = type_Q(params)
+    tp[1 0; params.B 0; 0 1; 0 params.B]
 end
 
 
@@ -130,7 +132,7 @@ struct PrivateKey
     key :: Polynomial
 
     function PrivateKey(params::Params, rng::AbstractRNG)
-        key = polynomial_r(params, rand(rng, Bool, params.n), params.r)
+        key = polynomial_r(params, rand(rng, Bool, params.n))
         new(params, key)
     end
 end
@@ -151,15 +153,13 @@ struct PublicKey
 
         params = sk.params
 
-        k0 = polynomial_small(params, rand(rng, 0:params.q-1, params.n), params.q)
+        k0 = polynomial_q(params, rand(rng, 0:params.q-1, params.n))
 
         # TODO: more precisely, we need e_max < Dq / (41n)
         e_max = cld(params.Dq, 41 * params.n) - 1
-        e = polynomial_small(params, rand(rng, 0:2*e_max, params.n), params.q) - e_max
+        e = polynomial_q(params, rand(rng, 0:2*e_max, params.n)) - e_max
 
-        rr_repr = rr_representation(params)
-
-        key_q = change_representation(rr_repr, change_modulus(params.q, sk.key))
+        key_q = polynomial_q(params, sk.key)
         k1 = k0 * key_q + e
 
         new(params, k0, k1)
@@ -181,28 +181,19 @@ struct BootstrapKey
 
         params = sk.params
 
-        rr_repr = rr_representation(params)
-        large_tp = large_type(params)
-        ptp = rr_repr{large_tp, params.Q}
+        ext_key = change_length(params.m, polynomial_Q(params, sk.key))
 
-        key_coeffs = [sk.key.coeffs; zeros(eltype(sk.key.coeffs), params.m - params.n)]
-        ext_key = polynomial_large(params, key_coeffs, params.Q)
-
-        v0 = zero(ptp)
-        v1 = one(ptp)
-        B_m = ptp(params.B)
-
-        G = [v1 v0; B_m v0; v0 v1; v0 B_m]
-        bkey = Array{Array{Polynomial{ptp}, 2}, 1}(undef, params.n)
+        G = gadget_matrix(params)
+        bkey = Array{Array{typeof(ext_key), 2}, 1}(undef, params.n)
         for i in 1:params.n
 
             # TODO: add rand() support for RadixInteger
-            aj = [polynomial_large(
+            aj = [polynomial_Q(
                 params,
-                rand(rng, BigInt(0):convert(BigInt, params.Q)-1, params.m), params.Q) for j in 1:4]
-            ej = [polynomial_large(
+                rand(rng, BigInt(0):convert(BigInt, params.Q)-1, params.m)) for j in 1:4]
+            ej = [polynomial_Q(
                 params,
-                rand(rng, -params.n:params.n, params.m), params.Q) for j in 1:4]
+                rand(rng, -params.n:params.n, params.m)) for j in 1:4]
             bj = [aj[j] * ext_key + ej[j] for j in 1:4]
             C = [aj[1] bj[1]; aj[2] bj[2]; aj[3] bj[3]; aj[4] bj[4]] .+ ext_key.coeffs[i] * G
             bkey[i] = C
@@ -325,7 +316,7 @@ end
 
 function deterministic_expand(params::Params, u)
     a = prng_expand(SmallType, BitArray(u), params.t + 1)
-    polynomial_r(params, a, params.r)
+    polynomial_r(params, a)
 end
 
 
@@ -339,9 +330,9 @@ function _encrypt_private(key::PrivateKey, rng::AbstractRNG, message::AbstractAr
 
     # TODO: Why 1/8? According to p.6 in the paper, even 1/2 should work.
     w_range = signed(div(params.Dr, 8))
-    w = polynomial_r(key.params, rand(rng, -w_range:w_range, length(message)), params.r)
+    w = polynomial_r(key.params, rand(rng, -w_range:w_range, length(message)))
 
-    message_poly = polynomial_r(key.params, message, params.r)
+    message_poly = polynomial_r(key.params, message)
     b = a * key.key + w + message_poly * params.Dr
 
     u, RLWE(a, b)
@@ -374,7 +365,7 @@ into a generic [`PackedCiphertext`](@ref) object.
 function normalize_ciphertext(ct::PrivateEncryptedCiphertext)
     params = ct.params
     a = deterministic_expand(params, ct.u)
-    b = polynomial_r(params, packbits(BigInt, ct.v), params.r) * 2^(params.t - 4)
+    b = polynomial_r(params, packbits(BigInt, ct.v)) * 2^(params.t - 4)
     PackedCiphertext(params, RLWE(a, b))
 end
 
@@ -432,15 +423,15 @@ function _encrypt_public(key::PublicKey, rng::AbstractRNG, message::AbstractArra
 
     params = key.params
 
-    u = polynomial_small(key.params, rand(rng, -1:1, params.n), params.q)
+    u = polynomial_q(key.params, rand(rng, -1:1, params.n))
 
     w1_max = signed(div(params.Dq, 41 * params.n))
-    w1 = polynomial_small(key.params, rand(rng, -w1_max:w1_max, params.n), params.q)
+    w1 = polynomial_q(key.params, rand(rng, -w1_max:w1_max, params.n))
 
     w2_max = signed(div(params.Dq, 82))
-    w2 = polynomial_small(key.params, rand(rng, -w2_max:w2_max, params.n), params.q)
+    w2 = polynomial_q(key.params, rand(rng, -w2_max:w2_max, params.n))
 
-    message_poly = polynomial_small(key.params, message, params.q)
+    message_poly = polynomial_q(key.params, message)
     a1 = key.k0 * u + w1
     a2 = key.k1 * u + w2 + message_poly * params.Dq
 
@@ -489,8 +480,8 @@ into a generic [`PackedCiphertext`](@ref) object.
 """
 function normalize_ciphertext(ct::PublicEncryptedCiphertext)
     params = ct.params
-    a = polynomial_r(params, packbits(BigInt, ct.a_bits), params.r)
-    b = polynomial_r(params, packbits(BigInt, ct.b_bits), params.r) * 2^(params.t - 5)
+    a = polynomial_r(params, packbits(BigInt, ct.a_bits))
+    b = polynomial_r(params, packbits(BigInt, ct.b_bits)) * 2^(params.t - 5)
     PackedCiphertext(params, RLWE(a, b))
 end
 
@@ -616,7 +607,7 @@ function _bootstrap_internal(
 
     t = initial_poly(bkey.params)
 
-    a = polynomial_large(bkey.params, zeros(Int, params.m), params.Q)
+    a = polynomial_Q(bkey.params, zeros(Int, params.m))
 
     # TODO: make sure u.b actually fits into Int
     b = shift_polynomial(t, -convert(Int, u.b)) * params.DQ_tilde
@@ -625,12 +616,10 @@ function _bootstrap_internal(
     mul(p, j) = shift_polynomial(p, j) - p
 
     # TODO: same as in BootstrapKey(); extract into a function?
-    ptp = eltype(t.coeffs)
-    v0 = zero(ptp)
-    v1 = one(ptp)
+    ptp = type_Q(params)
     B_m = ptp(params.B)
     base = Val(B_m)
-    G = [v1 v0; B_m v0; v0 v1; v0 B_m]
+    G = gadget_matrix(params)
 
     l = Val(2)
 

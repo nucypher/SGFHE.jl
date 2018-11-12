@@ -1,6 +1,6 @@
 using DarkIntegers
 using SGFHE
-using SGFHE: flatten, flatten_poly, polynomial_large, external_product
+using SGFHE: flatten, flatten_poly, polynomial_Q, external_product
 
 
 @testgroup "Internals" begin
@@ -72,62 +72,53 @@ end
 
 
 @testcase "flatten_poly()" for use_rng in ([false, true] => ["deterministic", "random"])
-    p = Params(64; rr_repr=RRElem)
 
-    B = typeof(p.B)(10) # p.B
-    B_bi = BigInt(B)
+    tp = UInt64
+    B = UInt64(2^30) # decomposition base
     l = 2
+    q = B^l - one(tp) # modulus
 
-    q = B^l - one(typeof(B))
-    q_bi = BigInt(q)
-    a = polynomial_large(p, rand(Int128, p.n), q)
+    rr_tp = RRElemMontgomery{tp, q}
 
-    poly_type = eltype(a.coeffs)
+    B_rr = rr_tp(B)
 
-    B_m = poly_type(B)
+    a = Polynomial(rr_tp.(rand(tp, 64)), true)
 
-    ll = Val(l)
-    b_val = Val(B_m)
-
-    lim_lo, lim_hi = decomposition_limits(B_bi, q_bi, use_rng)
+    lim_lo, lim_hi = decomposition_limits(B, q, use_rng)
     rng = use_rng ? MersenneTwister() : nothing
 
-    u = flatten_poly(rng, a, b_val, ll)
+    u = flatten_poly(rng, a, Val(B_rr), Val(l))
 
     for x in u
-        coeffs = convert.(BigInt, x.coeffs)
+        coeffs = convert.(tp, x.coeffs)
         @test all(c <= lim_hi || c >= lim_lo for c in coeffs)
     end
 
-    a_restored = sum(u .* B_m.^(0:l-1))
+    a_restored = sum(u .* B_rr.^(0:l-1))
 
     @test a == a_restored
 end
 
 
 @testcase "external_product()" for use_rng in ([false, true] => ["deterministic", "random"])
-    p = Params(64)
 
-    B = p.B
+    tp = UInt64
+    B = UInt64(2^30) # decomposition base
     l = 2
-    l_val = Val(l)
-    large_tp = typeof(B)
+    q = B^l - one(tp) # modulus
 
-    q = B^l - one(large_tp)
+    rr_tp = RRElemMontgomery{tp, q}
 
-    a = polynomial_large(p, rand(Int128, p.n), q)
-    b = polynomial_large(p, rand(Int128, p.n), q)
+    B_rr = rr_tp(B)
 
-    large_rr_tp = eltype(a.coeffs)
+    a = Polynomial(rr_tp.(rand(tp, 64)), true)
+    b = Polynomial(rr_tp.(rand(tp, 64)), true)
+    pz = Polynomial(rr_tp.(zeros(tp, 64)), true)
 
     rng = use_rng ? MersenneTwister() : nothing
 
-    cc(x) = large_rr_tp(x)
-
-    B_m = cc(B)
-    pz = polynomial_large(p, zeros(Int, p.n), q)
-    G = ([pz pz; pz pz; pz pz; pz pz] .+ cc.([1 0; B 0; 0 1; 0 B]))
-    a_restored, b_restored = external_product(rng, a, b, G, Val(B_m), l_val)
+    G = ([pz pz; pz pz; pz pz; pz pz] .+ rr_tp.([1 0; B 0; 0 1; 0 B]))
+    a_restored, b_restored = external_product(rng, a, b, G, Val(B_rr), Val(l))
 
     @test a == a_restored
     @test b == b_restored

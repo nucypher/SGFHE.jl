@@ -27,15 +27,15 @@ end
 @testcase(
 tags=[:performance],
 "flatten(), performance, <=64bit",
-for rr_type in [RRElem, RRElemMontgomery],
+for     rr_repr in [RRElem, RRElemMontgomery],
         use_rng in ([false, true] => ["deterministic", "random"]),
         num_type in [UInt64, MPNumber{2, UInt32}, MPNumber{4, UInt16}]
 
     rng = Random.MersenneTwister()
 
-    params = Params(64; rlwe_type=num_type, rr_type=rr_type)
+    params = Params(64; rlwe_type=num_type, rr_repr=rr_repr)
 
-    poly_type = rr_type{num_type, params.Q}
+    poly_type = rr_repr{num_type, params.Q}
 
     flatten_rng = use_rng ? rng : nothing
 
@@ -54,15 +54,15 @@ end)
 @testcase(
 tags=[:performance],
 "flatten(), performance, <=96bit",
-for rr_type in [RRElem, RRElemMontgomery],
+for     rr_repr in [RRElem, RRElemMontgomery],
         use_rng in ([false, true] => ["deterministic", "random"]),
         num_type in [UInt128, MPNumber{2, UInt64}, MPNumber{3, UInt32}]
 
     rng = Random.MersenneTwister()
 
-    params = Params(1024; rlwe_type=num_type, rr_type=rr_type)
+    params = Params(1024; rlwe_type=num_type, rr_repr=rr_repr)
 
-    poly_type = rr_type{num_type, params.Q}
+    poly_type = rr_repr{num_type, params.Q}
 
     flatten_rng = use_rng ? rng : nothing
 
@@ -81,18 +81,18 @@ end)
 @testcase(
 tags=[:performance],
 "external_product(), performance",
-for     rr_type in [RRElem, RRElemMontgomery],
+for     rr_repr in [RRElem, RRElemMontgomery],
         use_rng in ([false, true] => ["deterministic", "random"]),
         num_type in [UInt64, MPNumber{2, UInt32}, MPNumber{4, UInt16}]
 
-    p = Params(64; rlwe_type=num_type, rr_type=rr_type)
+    p = Params(64; rlwe_type=num_type, rr_repr=rr_repr)
     l = 2
     l_val = Val(l)
 
     rng = MersenneTwister()
     ext_prod_rng = use_rng ? rng : nothing
 
-    poly_type = rr_type{num_type, p.Q}
+    poly_type = rr_repr{num_type, p.Q}
 
     a = Polynomial(poly_type.(rand(rng, Int128, p.n)), true)
     b = Polynomial(poly_type.(rand(rng, Int128, p.n)), true)

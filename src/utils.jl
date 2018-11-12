@@ -34,7 +34,12 @@ function find_modulus(n::T, qmin::T, qmax::Union{T, Nothing}=nothing) where T
 end
 
 
-function packbits(::Type{T}, bits::Union{Array{Bool, 2}, BitArray{2}}) where T
+"""
+Convert a `(t, n)`-size array of bits to an `n`-size array of type `T`
+by treating its `i`-th row of the former array as lower bits
+of an `i`-th element of the latter array.
+"""
+function packbits(::Type{T}, bits::BitArray{2}) where T
     result = zeros(T, size(bits, 2))
     for i in 1:size(bits, 1)
         result .+= T.(bits[i,:]) * 2^(i-1)
@@ -43,8 +48,11 @@ function packbits(::Type{T}, bits::Union{Array{Bool, 2}, BitArray{2}}) where T
 end
 
 
-function unpackbits(arr::Array{T, 1}, itemsize::Int) where T
-    result = Array{Bool}(undef, itemsize, length(arr))
+"""
+
+"""
+function unpackbits(arr::Array{T, 1}, itemsize::Integer) where T
+    result = BitArray(undef, itemsize, length(arr))
     for i in 1:itemsize
         result[i,:] = Array(arr .& 2^(i-1) .> 0)
     end
@@ -62,7 +70,7 @@ function prng_expand(::Type{T}, seq::BitArray{1}, factor::Int) where T
     # Deterministically but randomly expand `seq` `factor` times.
     # TODO: should be done with SHAKE-128 or 256.
     rng = MersenneTwister(hash(seq))
-    bits = rand(rng, Bool, factor, length(seq))
+    bits = BitArray(rand(rng, Bool, factor, length(seq)))
     packbits(T, bits)
 end
 

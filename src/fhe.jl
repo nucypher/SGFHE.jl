@@ -239,7 +239,6 @@ function extract(a::Polynomial, i::Integer, n::Integer)
     if i < n
         [a.coeffs[i:-1:1]; -a.coeffs[end:-1:end-(n-i-1)]]
     else
-        # TODO: this case is not considered in the paper, behavior according to S. Gao
         a.coeffs[i:-1:i-n+1]
     end
 end
@@ -316,7 +315,6 @@ function _encrypt_private(key::PrivateKey, rng::AbstractRNG, message::AbstractAr
     u = rand(rng, Bool, params.n)
     a = deterministic_expand(params, u)
 
-    # TODO: Why 1/8? According to p.6 in the paper, even 1/2 should work.
     w_range = signed(params.Dr ÷ 8)
     w = polynomial_r(key.params, rand(rng, -w_range:w_range, length(message)))
 
@@ -378,9 +376,6 @@ Encrypts a single bit with the private key.
 Returns an [`EncryptedBit`](@ref) object.
 """
 function encrypt(key::PrivateKey, rng::AbstractRNG, message::Bool)
-    # TODO: This is technically not part of the original paper, but it works.
-    # Consult S. Gao about this.
-
     params = key.params
     tp = RRElem{SmallType, params.q}
     a = convert.(tp, rand(rng, 0:params.q-1, params.n))
@@ -425,10 +420,6 @@ function _encrypt_public(key::PublicKey, rng::AbstractRNG, message::AbstractArra
 
     a = reduce_modulus(RRElem, SmallType, params.r, a1)
     b = reduce_modulus(RRElem, SmallType, params.r, a2)
-
-    # TODO: `b` can be safely divided further by `(2^(params.t - 5)` without loss of info.
-    # For now we're saving the generic `b`, compatible with the one produced in private encryption.
-    # b = polynomial(round.(a2.coeffs * params.r / (2^(params.t - 5) * params.q)), params.r)
 
     RLWE(a, b)
 end

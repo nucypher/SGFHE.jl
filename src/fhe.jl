@@ -155,8 +155,9 @@ struct PublicKey
 
         k0 = polynomial_q(params, rand(rng, 0:params.q-1, params.n))
 
-        # TODO: more precisely, we need e_max < Dq / (41n)
-        e_max = cld(params.Dq, 41 * params.n) - 1
+        # We need `e_max` to be the largest integer strictly less than `Dq / (41n)`
+        q, r = divrem(params.Dq, 41 * params.n)
+        e_max = q - (r == 0)
         e = polynomial_q(params, rand(rng, 0:2*e_max, params.n)) - e_max
 
         key_q = polynomial_q(params, sk.key)

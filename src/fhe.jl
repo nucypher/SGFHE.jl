@@ -580,8 +580,11 @@ function _bootstrap_internal(
 
     a = polynomial_Q(bkey.params, zeros(Int, params.m))
 
-    # TODO: make sure u.b actually fits into Int
-    b = shift_polynomial(t, -convert(Int, u.b)) * params.DQ_tilde
+    # `u.b` can be any value in the unsigned integer range,
+    # and we need a negative of it, so we have to widen the type before conversion.
+    wtp = widen(encompassing_type(SmallType))
+    shift = signed(convert(wtp, u.b))
+    b = shift_polynomial(t, -shift) * params.DQ_tilde
 
     # TODO: same as in BootstrapKey(); extract into a function?
     ptp = type_Q(params)

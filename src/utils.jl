@@ -165,14 +165,22 @@ The result is randomized, and each element of the returned tuple `-2B < b[i] <= 
 @inline @generated function flatten(
         rng::AbstractRNG, a::T, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
 
+    @assert typeof(B) == T
+    @assert L >= 1
+
+    etp = encompassing_type(T)
+    B_u = convert(etp, B)
+
+    # Ensure that `-xmax` and `xmax` fit into the signed version of `etp`
+    @assert B_u <= typemax(etp) ÷ 4
+
     if isodd(B)
-        xmax = div(B-1, 2) * convert(T, 3)
+        xmax = (B-1) ÷ 2 * 3
     else
-        xmax = div(B, 2) * convert(T, 3)
+        xmax = B ÷ 2 * 3
     end
 
-    # TODO: can we avoid conversion here? xmax can be larger than an Int
-    xmax_i = convert(Int, xmax)
+    xmax_i = signed(convert(etp, xmax))
 
     pwrs = [B^i for i in 0:L-1]
 

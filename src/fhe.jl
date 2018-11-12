@@ -561,6 +561,14 @@ function initial_poly(params::Params{LT, RRT}) where {LT, RRT}
 end
 
 
+"""
+Multiplies the given polynomial by `(x^j - 1)`.
+"""
+function mul_by_xj_minus_one(p::Polynomial, j::Integer)
+    shift_polynomial(p, j) - p
+end
+
+
 function _bootstrap_internal(
         bkey::BootstrapKey, rng::Union{AbstractRNG, Nothing},
         enc_bit1::EncryptedBit, enc_bit2::EncryptedBit)
@@ -575,9 +583,6 @@ function _bootstrap_internal(
     # TODO: make sure u.b actually fits into Int
     b = shift_polynomial(t, -convert(Int, u.b)) * params.DQ_tilde
 
-    # multiplication by (x^j - 1)
-    mul(p, j) = shift_polynomial(p, j) - p
-
     # TODO: same as in BootstrapKey(); extract into a function?
     ptp = type_Q(params)
     B_m = ptp(params.B)
@@ -587,8 +592,8 @@ function _bootstrap_internal(
     l = Val(2)
 
     for k = 1:params.n
-        # TODO: make sure u.a[k] fits into Int
-        a, b = external_product(rng, a, b, mul.(bkey.key[k], convert(Int, u.a[k])) .+ G, base, l)
+        A = mul_by_xj_minus_one.(bkey.key[k], convert(SmallType, u.a[k])) .+ G
+        a, b = external_product(rng, a, b, A, base, l)
     end
 
     # `+1` as compared to the paper because of 1-based arrays in Julia

@@ -14,7 +14,7 @@ Fields
 
 `n :: Int` - polynomial length.
 
-    Params(n::Int; rlwe_type=nothing, rr_type=nothing)
+    Params(n::Int; rlwe_type=nothing, rr_repr=nothing)
 
 `n`: polynomial length. Must be a power of 2, >=64.
 
@@ -40,11 +40,11 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
     DQ_tilde :: LargeType
 
 
-    function Params(n::Int; rlwe_type=nothing, rr_type=nothing)
+    function Params(n::Int; rlwe_type=nothing, rr_repr=nothing)
 
         @assert n >= 64
         @assert 2^log2(n) == n
-        @assert rr_type in (nothing, RRElem, RRElemMontgomery)
+        @assert rr_repr in (nothing, RRElem, RRElemMontgomery)
 
         # All parameters are calculated as BigInts to avoid overflow.
         # Then we check that they actually fit into requested types.
@@ -80,8 +80,8 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
             @assert sizeof(rlwe_type) * 8 > log2(Q)
         end
 
-        if rr_type === nothing
-            rr_type = RRElemMontgomery
+        if rr_repr === nothing
+            rr_repr = RRElemMontgomery
         end
 
         B = r^2 * n * 35
@@ -89,7 +89,7 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
         Dq = div(q, 4)
         DQ_tilde = div(Q, 8)
 
-        new{rlwe_type, rr_type}(
+        new{rlwe_type, rr_repr}(
             n, r, q,
             Q, t, m,
             B, Dr, Dq,

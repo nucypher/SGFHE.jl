@@ -66,7 +66,7 @@ using SGFHE: flatten, flatten_poly, polynomial_large, external_product
 
 
 @testcase "flatten_poly()" for use_rng in ([false, true] => ["deterministic", "random"])
-    p = Params(64; rr_type=RRElem)
+    p = Params(64; rr_repr=RRElem)
 
     B = typeof(p.B)(10) # p.B
     B_bi = BigInt(B)

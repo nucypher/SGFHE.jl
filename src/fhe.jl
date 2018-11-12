@@ -59,7 +59,7 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
         @assert sizeof(SmallType) * 8 > log2(q)
 
         t = Int(log2(r)) - 1
-        m = div(r, 2)
+        m = r ÷ 2
 
         Qmin = r^4 * big_n^2 * 1220
         Qmax = r^4 * big_n^2 * 1225
@@ -85,9 +85,9 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
         end
 
         B = r^2 * n * 35
-        Dr = div(r, 4)
-        Dq = div(q, 4)
-        DQ_tilde = div(Q, 8)
+        Dr = r ÷ 4
+        Dq = q ÷ 4
+        DQ_tilde = Q ÷ 8
 
         new{rlwe_type, rr_repr}(
             n, r, q,
@@ -316,7 +316,7 @@ function _encrypt_private(key::PrivateKey, rng::AbstractRNG, message::AbstractAr
     a = deterministic_expand(params, u)
 
     # TODO: Why 1/8? According to p.6 in the paper, even 1/2 should work.
-    w_range = signed(div(params.Dr, 8))
+    w_range = signed(params.Dr ÷ 8)
     w = polynomial_r(key.params, rand(rng, -w_range:w_range, length(message)))
 
     message_poly = polynomial_r(key.params, message)
@@ -337,7 +337,7 @@ Returns a [`PrivateEncryptedCiphertext`](@ref) object.
 function encrypt_optimal(key::PrivateKey, rng::AbstractRNG, message::AbstractArray{Bool, 1})
     params = key.params
     u, rlwe = _encrypt_private(key, rng, message)
-    b_packed = div(rlwe.b, 2^(params.t - 4))
+    b_packed = rlwe.b ÷ 2^(params.t - 4)
     v = unpackbits(convert.(SmallType, b_packed.coeffs), 5)
     PrivateEncryptedCiphertext(params, BitArray(u), BitArray(v))
 end
@@ -412,10 +412,10 @@ function _encrypt_public(key::PublicKey, rng::AbstractRNG, message::AbstractArra
 
     u = polynomial_q(key.params, rand(rng, -1:1, params.n))
 
-    w1_max = signed(div(params.Dq, 41 * params.n))
+    w1_max = signed(params.Dq ÷ (41 * params.n))
     w1 = polynomial_q(key.params, rand(rng, -w1_max:w1_max, params.n))
 
-    w2_max = signed(div(params.Dq, 82))
+    w2_max = signed(params.Dq ÷ 82)
     w2 = polynomial_q(key.params, rand(rng, -w2_max:w2_max, params.n))
 
     message_poly = polynomial_q(key.params, message)
@@ -452,7 +452,7 @@ function encrypt_optimal(key::PublicKey, rng::AbstractRNG, message::AbstractArra
 
     a_bits = unpackbits(convert.(SmallType, rlwe.a.coeffs), params.t + 1)
 
-    b_packed = div(rlwe.b, 2^(params.t - 5))
+    b_packed = rlwe.b ÷ 2^(params.t - 5)
     b_bits = unpackbits(convert.(SmallType, b_packed.coeffs), 6)
 
     PublicEncryptedCiphertext(params, a_bits, b_bits)
@@ -498,12 +498,12 @@ function decrypt(key::PrivateKey, ct::PackedCiphertext)
     b1 = ct.rlwe.b - key.key * ct.rlwe.a
 
     # Plus half-interval (Dr) to "snap" to the values 0, Dr, 2Dr, ...
-    # div(x + Dr/2, Dr) is equivalent to round(x / Dr),
+    # `(x + Dr/2) ÷ Dr` is equivalent to `round(x / Dr)`,
     # but unlike it works well with the modulo values
     # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
     b1_coeffs = convert.(SmallType, b1.coeffs .+ params.Dr ÷ 2)
 
-    convert.(Bool, div.(b1_coeffs, params.Dr))
+    convert.(Bool, b1_coeffs .÷ params.Dr)
 end
 
 
@@ -523,12 +523,12 @@ function decrypt(key::PrivateKey, ct::Ciphertext)
     b1 = ct.rlwe.b - key * ct.rlwe.a
 
     # Plus half-interval (Dr) to "snap" to the values 0, Dr, 2Dr, ...
-    # div(x + Dr/2, Dr) is equivalent to round(x / Dr),
+    # `(x + Dr/2) ÷ Dr` is equivalent to `round(x / Dr)`,
     # but unlike it works well with the modulo values
     # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
     b1_coeffs = convert.(SmallType, b1.coeffs .+ params.Dr ÷ 2)
 
-    convert.(Bool, div.(b1_coeffs[1:params.n], params.Dr))
+    convert.(Bool, b1_coeffs[1:params.n] .÷ params.Dr)
 end
 
 
@@ -541,7 +541,7 @@ Returns a `Bool` object.
 """
 function decrypt(key::PrivateKey, enc_bit::EncryptedBit)
     b1 = enc_bit.lwe.b - sum(enc_bit.lwe.a .* key.key.coeffs)
-    convert(Bool, div(b1 + key.params.Dr ÷ 2, key.params.Dr))
+    convert(Bool, (b1 + key.params.Dr ÷ 2) ÷ key.params.Dr)
 end
 
 

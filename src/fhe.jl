@@ -248,16 +248,6 @@ end
 
 
 """
-    extract_lwe(rlwe::RLWE, i::Integer, n::Integer)
-
-Extracts an LWE of length `n` from an RLWE.
-"""
-function extract_lwe(rlwe::RLWE, i::Integer, n::Integer)
-    LWE(extract(rlwe.a, i, n), rlwe.b.coeffs[i])
-end
-
-
-"""
 A packed RLWE ciphertext encrypting an `n`-bit message
 that can be produced by an initial encryption with a private or a public key.
 Takes `2 * t * n` bits, where `t` is the bit size of the integer type used.
@@ -299,7 +289,7 @@ Returns an `Array{EncryptedBit, 1}`.
 """
 function split_ciphertext(ct::Union{Ciphertext, PackedCiphertext})
     n = ct.params.n
-    [EncryptedBit(extract_lwe(ct.rlwe, i, n)) for i in 1:n]
+    [EncryptedBit(LWE(extract(ct.rlwe.a, i, n), ct.rlwe.b.coeffs[i])) for i in 1:n]
 end
 
 

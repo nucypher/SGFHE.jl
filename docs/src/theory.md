@@ -420,7 +420,7 @@ Result: an LWE cipher ``\mathrm{LWE}_{\boldsymbol{s}}(y) = (\boldsymbol{a}, b) \
 
 *Paper:* Section 4.5.1.
 
-*Implementation:* [`extract_lwe()`](@ref SGFHE.extract_lwe) and [`split_ciphertext()`](@ref split_ciphertext)
+*Implementation:* [`split_ciphertext()`](@ref split_ciphertext)
 
 Given an RLWE cipher ``\mathrm{RLWE}_{\boldsymbol{s}}(\boldsymbol{y}) = (a(x), b(x)) \in R_{n,r}^2`` encrypting an ``n``-bit message ``\boldsymbol{y} \in \{0, 1\}^n``, the LWE ``\mathrm{LWE}_{\boldsymbol{s}}(y_i)`` encrpyting the ``i``-th bit is
 ```math
@@ -432,7 +432,7 @@ Given an RLWE cipher ``\mathrm{RLWE}_{\boldsymbol{s}}(\boldsymbol{y}) = (a(x), b
 
 *Note:* this is not described in the original paper.
 
-*Implementation:* [`extract_lwe()`](@ref SGFHE.extract_lwe) and [`split_ciphertext()`](@ref split_ciphertext)
+*Implementation:* [`split_ciphertext()`](@ref split_ciphertext)
 
 The procedure is the same as for the packed RLWE. Given an RLWE cipher ``\mathrm{RLWE}_{\boldsymbol{s}}(\boldsymbol{y}) = (a(x), b(x)) \in R_{m,r}^2`` encrypting an ``n``-bit message ``\boldsymbol{y} \in \{0, 1\}^n``, the LWE ``\mathrm{LWE}_{\boldsymbol{s}}(y_i)`` encrpyting the ``i``-th bit is
 ```math

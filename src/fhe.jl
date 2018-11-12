@@ -586,7 +586,6 @@ function _bootstrap_internal(
     shift = signed(convert(wtp, u.b))
     b = shift_polynomial(t, -shift) * params.DQ_tilde
 
-    # TODO: same as in BootstrapKey(); extract into a function?
     ptp = type_Q(params)
     B_m = ptp(params.B)
     base = Val(B_m)

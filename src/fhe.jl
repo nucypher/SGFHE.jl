@@ -225,9 +225,9 @@ function Base.:-(l1::LWE, l2::LWE)
 end
 
 
-struct RLWE
-    a :: Polynomial
-    b :: Polynomial
+struct RLWE{T <: AbstractRRElem}
+    a :: Polynomial{T}
+    b :: Polynomial{T}
 end
 
 

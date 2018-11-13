@@ -547,8 +547,9 @@ end
 
 # Creates a polynomial `sum(x^j for j in powers) mod x^len +/- 1`.
 # Powers can be negative, or greater than `len`, in which case they will be properly looped over.
-function _initial_poly(tp, powers, len, negacyclic)
-    coeffs = zeros(tp, len)
+function _initial_poly(
+        ::Type{T}, powers::AbstractArray{<:Integer, 1}, len::Integer, negacyclic::Bool) where T
+    coeffs = zeros(T, len)
     for i in powers
         coeffs[mod(i, len) + 1] += negacyclic ? (mod(fld(i, len), 2) == 0 ? 1 : -1) : 1
     end
@@ -556,9 +557,8 @@ function _initial_poly(tp, powers, len, negacyclic)
 end
 
 
-function initial_poly(params::Params{LT, RRT}) where {LT, RRT}
-    ptp = RRT{LT, params.Q}
-    _initial_poly(ptp, -Int(params.Dr-1):Int(params.Dr-1), params.m, true)
+function initial_poly(params::Params)
+    _initial_poly(type_Q(params), -Int(params.Dr-1):Int(params.Dr-1), params.m, true)
 end
 
 
@@ -671,8 +671,8 @@ function pack_encrypted_bits(
     @assert length(enc_bits) == params.n
 
     # trivial LWE encrypting 1
-    T = eltype(enc_bits[1].lwe.a)
-    enc_trivial = EncryptedBit(LWE(zeros(T, params.n), T(params.Dr)))
+    lwe_type = type_r(params)
+    enc_trivial = EncryptedBit(LWE(zeros(lwe_type, params.n), lwe_type(params.Dr)))
 
     new_lwes = [_bootstrap_internal(bkey, rng, enc_trivial, enc_bit)[1] for enc_bit in enc_bits]
 
@@ -696,4 +696,3 @@ function pack_encrypted_bits(
 
     Ciphertext(params, RLWE(w, v))
 end
-

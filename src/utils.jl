@@ -105,25 +105,24 @@ end
 @doc """
 ``\\triangleleft`` operator in the paper.
 
-Returns an `L`-tuple `b` such that `sum(b .* B.^(0:L-1)) == a`.
+Returns an `l`-tuple `b` such that `sum(b .* B.^(0:l-1)) == a`.
 (with all the operations performed in the residue ring `a` belongs to).
 
-Assumes `B^L <= q` where `q` is the modulus of `a`.
+Assumes `B^l <= q` where `q` is the modulus of `a`.
 """ flatten()
 
 
 """
-    flatten(rng::Nothing, a::AbstractRRElem, ::Val{B}, l_val::Val{L})
+    flatten(rng::Nothing, a::AbstractRRElem, ::Val{B}, ::Val{l})
 
 The result is deterministic, and each element of the returned tuple `-B/2 < b[i] <= B/2`
 (where the comparisons are modulo `modulus(a)`).
 """
 @inline @generated function flatten(
-        rng::Nothing,
-        a::T, ::Val{B}, l_val::Val{L}) where {B, L, T <: AbstractRRElem}
+        rng::Nothing, a::T, ::Val{B}, ::Val{l}) where {B, l, T <: AbstractRRElem}
 
     @assert typeof(B) == T
-    @assert L >= 1
+    @assert l >= 1
 
     # range offset
     if isodd(B)
@@ -132,22 +131,22 @@ The result is deterministic, and each element of the returned tuple `-B/2 < b[i]
         s = B ÷ 2 - 1
     end
 
-    pwrs = [B^i for i in 0:L-1]
+    pwrs = [B^i for i in 0:l-1]
     offset = sum(pwrs) * s
     decomp_blocks = [
         quote
             r, a = divrem(a, $(pwrs[i]))
             decomp = Base.setindex(decomp, r, $i)
         end
-        for i in L:-1:2]
+        for i in l:-1:2]
 
     quote
-        decomp = zero_tuple(NTuple{L, T})
+        decomp = zero_tuple(NTuple{l, T})
         a += $offset
         $(decomp_blocks...)
         decomp = Base.setindex(decomp, a, 1)
 
-        for i in 1:L
+        for i in 1:l
             decomp = Base.setindex(decomp, decomp[i] - $s, i)
         end
 
@@ -157,16 +156,16 @@ end
 
 
 """
-    flatten(rng::AbstractRNG, a::AbstractRRElem, ::Val{B}, l_val::Val{L})
+    flatten(rng::AbstractRNG, a::AbstractRRElem, ::Val{B}, ::Val{l})
 
 The result is randomized, and each element of the returned tuple `-2B < b[i] <= 2B`
 (where the comparisons are modulo `modulus(a)`).
 """
 @inline @generated function flatten(
-        rng::AbstractRNG, a::T, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
+        rng::AbstractRNG, a::T, B_val::Val{B}, l_val::Val{l}) where {B, l, T <: AbstractRRElem}
 
     @assert typeof(B) == T
-    @assert L >= 1
+    @assert l >= 1
 
     etp = encompassing_type(T)
     B_u = convert(etp, B)
@@ -182,25 +181,25 @@ The result is randomized, and each element of the returned tuple `-2B < b[i] <= 
 
     xmax_i = signed(convert(etp, xmax))
 
-    pwrs = [B^i for i in 0:L-1]
+    pwrs = [B^i for i in 0:l-1]
 
     rand_a_sub_blocks = [
         quote
             rand_a -= x[$i] * $(pwrs[i])
         end
-        for i in 1:L]
+        for i in 1:l]
 
     quote
-        x = zero_tuple(NTuple{L, T})
-        for i in 1:L
+        x = zero_tuple(NTuple{l, T})
+        for i in 1:l
             x = Base.setindex(x, convert(T, rand(rng, -$xmax_i:$xmax_i)), i)
         end
 
         rand_a = a
         $(rand_a_sub_blocks...)
 
-        y = flatten(nothing, rand_a, base, l)
-        for i in 1:L
+        y = flatten(nothing, rand_a, B_val, l_val)
+        for i in 1:l
             x = Base.setindex(x, x[i] + y[i], i)
         end
         x
@@ -211,19 +210,19 @@ end
 """
     function flatten_poly(
         rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{<:AbstractRRElem}, base::Val{B}, l::Val{L})
+        a::Polynomial{<:AbstractRRElem}, B_val::Val{B}, l_val::Val{l})
 
 Applies [`flatten`](@ref) to each of the coefficients of the polynomial,
-and return a tuple of `L` polynomials, where the `i`-th polynomial is created out
+and return a tuple of `l` polynomials, where the `i`-th polynomial is created out
 of `i`-th elements of the returned tuples.
 """
 @Base.propagate_inbounds function flatten_poly(
         rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{T}, base::Val{B}, l::Val{L}) where {B, L, T <: AbstractRRElem}
-    results = [Polynomial(zeros(T, length(a)), a.negacyclic) for i in 1:L]
+        a::Polynomial{T}, B_val::Val{B}, l_val::Val{l}) where {B, l, T <: AbstractRRElem}
+    results = [Polynomial(zeros(T, length(a)), a.negacyclic) for i in 1:l]
     for j in 1:length(a)
-        decomp = flatten(rng, a.coeffs[j], base, l)
-        for i in 1:L
+        decomp = flatten(rng, a.coeffs[j], B_val, l_val)
+        for i in 1:l
             results[i].coeffs[j] = decomp[i]
         end
     end

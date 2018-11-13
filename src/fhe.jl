@@ -526,17 +526,18 @@ end
 """
     external_product(
         rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2}, base, l)
+        a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2}, B_val::Val, l_val::Val)
 
 ``\\odot`` operator in the paper. Returns `[flatten(a); flatten(b)] * A`.
 If `rng` is `nothing`, deterministic flattening is used.
 """
 function external_product(
         rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2}, base, l) where T
+        a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2},
+        B_val::Val, l_val::Val) where T
 
-    a_decomp = flatten_poly(rng, a, base, l)
-    b_decomp = flatten_poly(rng, b, base, l)
+    a_decomp = flatten_poly(rng, a, B_val, l_val)
+    b_decomp = flatten_poly(rng, b, B_val, l_val)
     u = [a_decomp; b_decomp]
     a_res = sum(u .* A[:,1])
     b_res = sum(u .* A[:,2])
@@ -587,15 +588,13 @@ function _bootstrap_internal(
     b = shift_polynomial(t, -shift) * params.DQ_tilde
 
     ptp = type_Q(params)
-    B_m = ptp(params.B)
-    base = Val(B_m)
+    B_val = Val(ptp(params.B))
+    l_val = Val(2)
     G = gadget_matrix(params)
-
-    l = Val(2)
 
     for k = 1:params.n
         A = mul_by_xj_minus_one.(bkey.key[k], convert(SmallType, u.a[k])) .+ G
-        a, b = external_product(rng, a, b, A, base, l)
+        a, b = external_product(rng, a, b, A, B_val, l_val)
     end
 
     # `+1` as compared to the paper because of 1-based arrays in Julia
@@ -639,8 +638,9 @@ end
 
 
 function shortened_external_product(
-        rng::Union{AbstractRNG, Nothing}, a::Polynomial, b1::Polynomial, b2::Polynomial, B)
-    u1, u2 = flatten_poly(rng, a, B, Val(2))
+        rng::Union{AbstractRNG, Nothing},
+        a::Polynomial{T}, b1::Polynomial{T}, b2::Polynomial{T}, B_val::Val) where T
+    u1, u2 = flatten_poly(rng, a, B_val, Val(2))
     u1 * b1 + u2 * b2
 end
 
@@ -681,13 +681,12 @@ function pack_encrypted_bits(
         for i in 1:params.n]
     b = change_length(params.m, Polynomial([new_lwe.b for new_lwe in new_lwes], true))
 
-    B_m = ptp(params.B)
-    base = Val(B_m)
+    B_val = Val(ptp(params.B))
 
     w_tilde = sum(shortened_external_product(
-        nothing, as[i], bkey.key[i][3,1], bkey.key[i][4,1], base) for i in 1:params.n)
+        nothing, as[i], bkey.key[i][3,1], bkey.key[i][4,1], B_val) for i in 1:params.n)
     v_tilde = sum(shortened_external_product(
-        nothing, as[i], bkey.key[i][3,2], bkey.key[i][4,2], base) for i in 1:params.n)
+        nothing, as[i], bkey.key[i][3,2], bkey.key[i][4,2], B_val) for i in 1:params.n)
 
     w1_tilde = -w_tilde
     v1_tilde = b - v_tilde

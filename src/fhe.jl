@@ -118,7 +118,7 @@ polynomial_Q(params::Params, p::Polynomial) =
 
 function gadget_matrix(params::Params)
     tp = type_Q(params)
-    tp[1 0; params.B 0; 0 1; 0 params.B]
+    tp.([1 0; params.B 0; 0 1; 0 params.B])
 end
 
 
@@ -575,6 +575,8 @@ function _bootstrap_internal(
         enc_bit1::EncryptedBit, enc_bit2::EncryptedBit)
 
     params = bkey.params
+    ptp = type_Q(params)
+
     u = enc_bit1.lwe + enc_bit2.lwe
 
     t = initial_poly(bkey.params)
@@ -585,9 +587,8 @@ function _bootstrap_internal(
     # and we need a negative of it, so we have to widen the type before conversion.
     wtp = widen(encompassing_type(SmallType))
     shift = signed(convert(wtp, u.b))
-    b = shift_polynomial(t, -shift) * params.DQ_tilde
+    b = shift_polynomial(t, -shift) * ptp(params.DQ_tilde)
 
-    ptp = type_Q(params)
     B_val = Val(ptp(params.B))
     l_val = Val(2)
     G = gadget_matrix(params)

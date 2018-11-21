@@ -16,11 +16,20 @@ params = Params(64)
 key = PrivateKey(params, rng)
 bkey = BootstrapKey(rng, key)
 
-y1 = true
-y2 = false
+# Can only encrypt a block of bits at once
+bits = rand(Bool, params.n)
+encrypted_array = encrypt(key, rng, bits)
+encrypted_bits = split_ciphertext(encrypted_array)
 
-enc_y1 = encrypt(key, rng, y1)
-enc_y2 = encrypt(key, rng, y2)
+# we will run bootstrap() on the 10th and the 20th bit
+i1 = 10
+i2 = 20
+
+y1 = bits[i1]
+y2 = bits[i2]
+
+enc_y1 = encrypted_bits[i1]
+enc_y2 = encrypted_bits[i2]
 
 enc_and, enc_or, enc_xor = bootstrap(bkey, rng, enc_y1, enc_y2)
 res_and, res_or, res_xor = [decrypt(key, enc_bit) for enc_bit in (enc_and, enc_or, enc_xor)]

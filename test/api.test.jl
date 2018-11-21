@@ -42,27 +42,9 @@ end
 end
 
 
-@testcase "generating encrypted bits directly" begin
-    rng = MersenneTwister()
-    params = Params(512)
-    key = PrivateKey(params, rng)
-
-    for i in 1:1000
-        message = rand(rng, Bool)
-        enc_bit = encrypt(key, rng, message)
-        decrypted = decrypt(key, enc_bit)
-
-        if message != decrypted
-            @critical @test_fail "Decrypted value is wrong"
-        end
-    end
-end
-
-
 @testcase(
 "bootstrap",
-for use_rng in ([false, true] => ["deterministic", "random"]),
-    direct_bits in ([false, true] => ["bits from encrypt()", "bits from split_ciphertext()"])
+for use_rng in ([false, true] => ["deterministic", "random"])
 
     rng = MersenneTwister()
     params = Params(64)
@@ -71,12 +53,8 @@ for use_rng in ([false, true] => ["deterministic", "random"]),
 
     message = rand(rng, Bool, params.n)
 
-    if direct_bits
-        ct = encrypt(key, rng, message)
-        enc_bits = split_ciphertext(ct)
-    else
-        enc_bits = [encrypt(key, rng, x) for x in message]
-    end
+    ct = encrypt(key, rng, message)
+    enc_bits = split_ciphertext(ct)
 
     rng_arg = use_rng ? rng : nothing
 

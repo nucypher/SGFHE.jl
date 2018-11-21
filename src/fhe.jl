@@ -370,28 +370,6 @@ end
 
 
 """
-    encrypt(key::PrivateKey, rng::AbstractRNG, message::Bool)
-
-Encrypts a single bit with the private key.
-Returns an [`EncryptedBit`](@ref) object.
-"""
-function encrypt(key::PrivateKey, rng::AbstractRNG, message::Bool)
-    params = key.params
-    tp = RRElem{SmallType, params.q}
-    a = convert.(tp, rand(rng, 0:params.q-1, params.n))
-
-    # Max error according to Lemma 2.3
-    tau = signed(params.q * (params.n - 3) ÷ (2 * params.r))
-
-    e = convert(tp, mod(rand(rng, -tau:tau), params.q))
-    b = sum(a .* convert.(Int, key.key.coeffs)) + e + (message ? params.Dq : 0)
-
-    big_lwe = LWE(a, b)
-    EncryptedBit(reduce_modulus(RRElem, SmallType, params.r, big_lwe))
-end
-
-
-"""
 A space-optimal representation of `n` bits encrypted with a public key
 (taking `(10 + log2(n))n` bits in total).
 """

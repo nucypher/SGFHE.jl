@@ -151,7 +151,7 @@ where
 ```
 
 
-### External product (``\odot``)
+### [External product (``\odot``)](@id External-product)
 
 *Paper:* Section 2.5.
 
@@ -167,7 +167,7 @@ External product acts on a two-element vector of polynomials ``(a(x), b(x)) \in 
 where the results of applying ``\triangleleft`` to ``a(x)`` and ``b(x)`` (each an ``\ell``-vector of polynomials) are concatenated, producing a ``2\ell``-vector.
 
 
-### Shortened external product (``\odot``)
+### [Shortened external product (``\odot``)](@id Shortened-external-product)
 
 *Paper:* Section 2.5.
 
@@ -600,7 +600,7 @@ Algorithm:
   A^{(i)} = G + (x^{u_i} - 1) C^{(i)} \,\mathrm{mod}\,(x^m+1, Q), \\
   (a(x), b(x)) \leftarrow (a(x), b(x)) \odot (A^{(i)}, B, \ell),
   ```
-  where G is the gadget matrix (see [Scheme parameters](@ref Scheme-parameters-theory)).
+  where G is the gadget matrix (see [Scheme parameters](@ref Scheme-parameters-theory)) and ``\odot`` is the [external product](@ref External-product).
 * Build LWEs
   ```math
   \boldsymbol{a}^{\mathrm{AND}} = (\mathrm{Extract}[\boldsymbol{a}, 3m/4], \tilde{D}_Q + b_{3m/4}), \\
@@ -657,13 +657,10 @@ Algorithm:
 * Create a polynomial ``\tilde{b}(x) = \mathcal{P}[\boldsymbol{b}] \in R_{m,Q}``. Again, we are treating the resulting polynomial as modulo ``(x^m+1)``.
 * Calculate:
   ```math
-  \tilde{w}(x) = \sum_{i=0}^{n-1}
-    (a^{(i)}(x) \triangleleft (B, \ell))
-    \cdot (C^{(i)}_{\ell+1,1}(x), \dots, C^{(i)}_{2\ell,1}(x)), \\
-  \tilde{w}(x) = \sum_{i=0}^{n-1}
-    (a^{(i)}(x) \triangleleft (B, \ell))
-    \cdot (C^{(i)}_{\ell+1,2}(x), \dots, C^{(i)}_{2\ell,2}(x)).
+  \left( \tilde{w}(x), \tilde{v}(x) \right) = \sum_{i=0}^{n-1}
+    a^{(i)}(x) \odot (C^{(i)}, B, \ell),
   ```
+  where ``\odot`` is the [shortened external product](@ref Shortened-external-product).
 * Calculate:
   ```math
   \tilde{w}_1(x) = -\tilde{w}(x), \\

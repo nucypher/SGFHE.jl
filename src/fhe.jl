@@ -176,7 +176,7 @@ Creates the FHE bootstrap key based on the given private key.
 struct BootstrapKey
 
     params :: Params
-    key :: Array{Array{Polynomial, 2}, 1}
+    key :: Array{Array{Polynomial{T}, 2}, 1} where T
 
     function BootstrapKey(rng::AbstractRNG, sk::PrivateKey) where {LT, RRT}
 

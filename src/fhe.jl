@@ -1,6 +1,6 @@
 using Random
 using DarkIntegers
-using DarkIntegers: AbstractRRElem, change_modulus
+using DarkIntegers: AbstractRRElem
 
 
 const SmallType = UInt64

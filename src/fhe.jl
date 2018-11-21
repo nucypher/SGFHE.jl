@@ -616,11 +616,23 @@ function bootstrap(
 end
 
 
+"""
+    shortened_external_product(
+        rng::Union{AbstractRNG, Nothing},
+        a::Polynomial{T}, A::Array{Polynomial{T}, 2}, B_val::Val, l_val::Val)
+
+``\\odot`` operator in the paper. Returns `flatten(a) * A[l+1:2l,:]`.
+If `rng` is `nothing`, deterministic flattening is used.
+"""
 function shortened_external_product(
         rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{T}, b1::Polynomial{T}, b2::Polynomial{T}, B_val::Val) where T
-    u1, u2 = flatten_poly(rng, a, B_val, Val(2))
-    u1 * b1 + u2 * b2
+        a::Polynomial{T}, A::Array{Polynomial{T}, 2},
+        B_val::Val, l_val::Val{l}) where {T, l}
+
+    u = flatten_poly(rng, a, B_val, l_val)
+    a_res = sum(u .* A[l+1:2*l,1])
+    b_res = sum(u .* A[l+1:2*l,2])
+    a_res, b_res
 end
 
 
@@ -662,10 +674,12 @@ function pack_encrypted_bits(
 
     B_val = Val(ptp(params.B))
 
-    w_tilde = sum(shortened_external_product(
-        nothing, as[i], bkey.key[i][3,1], bkey.key[i][4,1], B_val) for i in 1:params.n)
-    v_tilde = sum(shortened_external_product(
-        nothing, as[i], bkey.key[i][3,2], bkey.key[i][4,2], B_val) for i in 1:params.n)
+    l_val = Val(2)
+    w_v_pairs = [shortened_external_product(
+        rng, as[i], bkey.key[i], B_val, l_val) for i in 1:params.n]
+
+    w_tilde = sum(w for (w, v) in w_v_pairs)
+    v_tilde = sum(v for (w, v) in w_v_pairs)
 
     w1_tilde = -w_tilde
     v1_tilde = b - v_tilde

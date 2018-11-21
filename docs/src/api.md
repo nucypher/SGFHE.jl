@@ -68,5 +68,6 @@ reduce_modulus
 flatten
 flatten_poly
 external_product
+shortened_external_product
 extract
 ```

@@ -157,10 +157,27 @@ where
 
 *Implementation:* [`external_product()`](@ref SGFHE.external_product)
 
-External product acts on a two-element vector of polynomials ``\boldsymbol{v} \in R_{n,q}^2`` and a ``2\ell \times 2`` matrix of polynomials ``A \in R_{n,q}^{2\ell \times 2}``:
+External product acts on a two-element vector of polynomials ``(a(x), b(x)) \in R_{n,q}^2`` and a matrix of polynomials ``A \in R_{n,q}^{2\ell \times 2}``:
 ```math
-\boldsymbol{v} \odot (A, B, \ell) = \left( \boldsymbol{v} \triangleleft (B, \ell) \right) A \in R_{n,q}^2.
+\boldsymbol{v} \odot (A, B, \ell)
+  = \left(
+    a(x) \triangleleft (B, \ell), b(x) \triangleleft (B, \ell)
+  \right) A \in R_{n,q}^2,
 ```
+where the results of applying ``\triangleleft`` to ``a(x)`` and ``b(x)`` (each an ``\ell``-vector of polynomials) are concatenated, producing a ``2\ell``-vector.
+
+
+### Shortened external product (``\odot``)
+
+*Paper:* Section 2.5.
+
+*Implementation:* [`shortened_external_product()`](@ref SGFHE.shortened_external_product)
+
+This is a version of the external product acting on a single polynomial ``a(x) \in R_{n,q}`` and a matrix of polynomials ``A \in R_{n,q}^{2\ell \times 2}``:
+```math
+\boldsymbol{a} \odot (A, B, \ell) = \left( a(x) \triangleleft (B, \ell) \right) A_{\ell+1 \dots 2\ell, \dots} \in R_{n,q}^2,
+```
+where ``A_{\ell+1 \dots 2\ell, \dots}`` denotes the bottom half of the matrix ``A`` (the rows from ``\ell+1`` to ``2\ell``).
 
 
 ## [Scheme parameters](@id Scheme-parameters-theory)

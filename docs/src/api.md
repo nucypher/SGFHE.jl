@@ -69,5 +69,4 @@ flatten
 flatten_poly
 external_product
 extract
-extract_lwe
 ```

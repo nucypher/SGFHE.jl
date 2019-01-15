@@ -321,6 +321,9 @@ function _encrypt_private(key::PrivateKey, rng::AbstractRNG, message::AbstractAr
     message_poly = polynomial_r(key.params, message)
     b = a * key.key + w + message_poly * params.Dr
 
+    # Leaving only the highmost 5 bits of `b`.
+    b = (b ÷ 2^(params.t - 4)) * 2^(params.t - 4)
+
     u, RLWE(a, b)
 end
 
@@ -397,7 +400,9 @@ function _encrypt_public(key::PublicKey, rng::AbstractRNG, message::AbstractArra
     a2 = key.k1 * u + w2 + message_poly * params.Dq
 
     a = reduce_modulus(RRElem, SmallType, params.r, a1)
-    b = reduce_modulus(RRElem, SmallType, params.r, a2)
+    # TODO: assuming here that `r` is a multiple of `2^(params.t - 5)`.
+    b = reduce_modulus(RRElem, SmallType, params.r, a2, true, params.r ÷ 2^(params.t - 5))
+    b = b * 2^(params.t - 5)
 
     RLWE(a, b)
 end

@@ -1,7 +1,6 @@
 using Primes
 using Random
 using DarkIntegers
-using DarkIntegers: change_representation, change_modulus_proportional, change_base_type
 
 
 """
@@ -76,18 +75,26 @@ end
 
 """
     function reduce_modulus(
-        new_repr, new_base_type, new_modulus::Unsigned, p::Polynomial{<:AbstractRRElem})
+        new_repr, new_base_type, new_modulus::Unsigned,
+        x::Union{<:AbstractRRElem, Polynomial{<:AbstractRRElem}},
+        floor_result::Bool=false,
+        new_max::Union{Nothing, Unsigned}=nothing)
 
-Reduces the modulus of all coefficients of a polynomial, simultaneously casting them
-to the residue ring representation `new_repr` and type `new_base_type`.
+Reduces the modulus of the given value or all coefficients of the given polynomial,
+simultaneously casting them to the residue ring representation `new_repr` and type `new_base_type`.
+If `floor_result` is `true`, use flooring when rescaling, otherwise use rounding.
+If `new_max` is `nothing`, it is taken equal to `new_modulus`.
 """
 @inline function reduce_modulus(
         new_repr, new_base_type, new_modulus::Unsigned,
-        x::Union{T, Polynomial{T}}) where T <: AbstractRRElem
+        x::Union{T, Polynomial{T}},
+        floor_result::Bool=false,
+        new_max::Union{Nothing, Unsigned}=nothing) where T <: AbstractRRElem
     # Change representation to the regular residue ring element first
     # to avoid conversions during division.
     x_rr = change_representation(RRElem, x)
-    x_cm = change_modulus_proportional(new_modulus, x_rr)
+    x_rs = rescale(new_max === nothing ? new_modulus : new_max, x_rr, !floor_result)
+    x_cm = change_modulus(new_modulus, x_rs)
     x_ct = change_base_type(new_base_type, x_cm)
     change_representation(new_repr, x_ct)
 end

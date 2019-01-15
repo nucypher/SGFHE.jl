@@ -81,6 +81,8 @@ The function ``\mathrm{ModRed}[a, q_1, q_2]`` where ``0 \le x < q_1`` and ``q_2 
 \mathrm{ModRed}[a, q_1, q_2] = \left\lfloor \frac{a q_2}{q_1} \right\rceil \,\mathrm{mod}\,q_2.
 ```
 
+Optionally, flooring (``\lfloor \rfloor``) can be used instead of rounding; we will denote this case ``\mathrm{ModRed}[a, q_1, q_2, \mathrm{floor}]``.
+
 ``\mathrm{ModRed}`` can be applied to a vector, converting each of its elements. That is, if ``\boldsymbol{b} = \mathrm{ModRed}[\boldsymbol{a}, q_1, q_2]``, then the elements of ``\boldsymbol{b}`` are ``b_i = \mathrm{ModRed}[a_i, q_1, q_2]``.
 
 Furthermore, ``\mathrm{ModRed}`` can be applied to the objects of belonging to ``\mathbb{Z}_q^n \times \mathbb{Z}_q`` (in particular, [LWE ciphers](@ref Creating-LWEs)), as
@@ -258,6 +260,10 @@ Algorithm:
   ```math
   b(x) = a(x) s(x) + w(x) + \mathcal{P}[\boldsymbol{m}] D_r \,\mathrm{mod}\,(x^n+1,r).
   ```
+* Leave only the highmost 5 bits of each coefficient of ``b(x)`` set:
+  ```math
+  b(x) = 2^{t-4} (b(x) \div 2^{t-4}).
+  ```
 
 Result: an RLWE cipher ``(a(x),b(x)) \in R_{n,r}^2``.
 
@@ -270,7 +276,7 @@ Result: an RLWE cipher ``(a(x),b(x)) \in R_{n,r}^2``.
 
 Starting from where the algorithm in the previous section ended,
 
-* Calculate ``\tilde{b}(x) = b(x) \div 2^{t-4}`` (in other words, only highest 5 bits of ``b(x)``'s coefficients are important)
+* Calculate ``\tilde{b}(x) = b(x) \div 2^{t-4}`` (remember, only highest 5 bits of each coefficient of ``b(x)`` are set).
 * Convert the vector ``\tilde{\boldsymbol{b}} = \mathcal{C}[\tilde{b}(x)]`` into a matrix ``V \in \{0, 1\}^{n \times 5}`` where the ``i``-th row is the bit representation of ``\tilde{b}_i``.
 
 Result: a pair ``(\boldsymbol{u}, V) \in \{0, 1\}^n \times \{0, 1\}^{n \times 5}``.
@@ -359,8 +365,9 @@ Algorithm:
 * Calculate
   ```math
   a(x) = \mathrm{ModRed}[a_1(x), q, r], \\
-  b(x) = \mathrm{ModRed}[b_1(x), q, r].
+  b(x) = 2^{t-5} \mathrm{ModRed}[b_1(x), q, r \div 2^{t-5}, \mathrm{floor}].
   ```
+  (only highmost 6 bits of each coefficient of ``b(x)`` are set).
 
 Result: an RLWE cipher ``(a(x),b(x)) \in R_{n,r}^2``.
 
@@ -373,7 +380,7 @@ Result: an RLWE cipher ``(a(x),b(x)) \in R_{n,r}^2``.
 
 Starting from where the algorithm in the previous section ended,
 
-* Calculate ``\tilde{b}(x) = b(x) \div 2^{t-5}`` (in other words, only highest 6 bits of ``b(x)``'s coefficients are important)
+* Calculate ``\tilde{b}(x) = b(x) \div 2^{t-5}`` (remember, only highmost 6 bits of each coefficient of ``b(x)`` are set).
 * Convert the vector ``\tilde{\boldsymbol{b}} = \mathcal{C}[\tilde{b}(x)]`` into a matrix ``V \in \{0, 1\}^{n \times 6}`` where the ``i``-th row is the bit representation of ``\tilde{b}_i``.
 * Convert the vector ``\boldsymbol{a} = \mathcal{C}[a(x)]`` into a matrix ``U \in \{0, 1\}^{n \times (t+1)}`` where the ``i``-th row is the bit representation of ``a_i``.
 

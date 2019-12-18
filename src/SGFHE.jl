@@ -19,4 +19,14 @@ export split_ciphertext
 export bootstrap
 export pack_encrypted_bits
 
+module Scheme2
+
+using ..SGFHE: find_modulus, prng_expand, reduce_modulus
+using DarkIntegers
+
+include("rns.jl")
+include("fhe2.jl")
+
+end
+
 end

@@ -1,6 +1,6 @@
 using Random
 using DarkIntegers
-using DarkIntegers: AbstractRRElem
+using DarkIntegers: AbstractModUInt
 
 
 const SmallType = UInt64
@@ -14,17 +14,17 @@ Fields
 
 `n :: Int` - polynomial length.
 
-    Params(n::Int; rlwe_type=nothing, rr_repr=nothing)
+    Params(n::Int; rlwe_type=nothing, mod_repr=nothing)
 
 `n`: polynomial length. Must be a power of 2, >=64.
 
 `rlwe_type`: an unsigned integer type used for bootstrapping
-             (`UInt` or `MPNumber` of a large enough size).
+             (`UInt` or `MLUInt` of a large enough size).
 
-`rr_repr`: the residue ring elements representation, must be one of
-           `DarkIntegers.RRElem`, `DarkIntegers.RRElemMontgomery`
+`mod_repr`: the modulo integer representation, must be one of
+           `DarkIntegers.ModUInt`, `DarkIntegers.MgModUInt`
 """
-struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
+struct Params{LargeType <: Unsigned, RRType <: AbstractModUInt}
 
     "Polynomial length"
     n :: Int
@@ -40,11 +40,11 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
     DQ_tilde :: LargeType
 
 
-    function Params(n::Int; rlwe_type=nothing, rr_repr=nothing)
+    function Params(n::Int; rlwe_type=nothing, mod_repr=nothing)
 
         @assert n >= 64
         @assert 2^log2(n) == n
-        @assert rr_repr in (nothing, RRElem, RRElemMontgomery)
+        @assert mod_repr in (nothing, ModUInt, MgModUInt)
 
         # All parameters are calculated as BigInts to avoid overflow.
         # Then we check that they actually fit into requested types.
@@ -80,8 +80,8 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
             @assert sizeof(rlwe_type) * 8 > log2(Q)
         end
 
-        if rr_repr === nothing
-            rr_repr = RRElemMontgomery
+        if mod_repr === nothing
+            mod_repr = MgModUInt
         end
 
         B = r^2 * n * 35
@@ -89,7 +89,7 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
         Dq = q ÷ 4
         DQ_tilde = Q ÷ 8
 
-        new{rlwe_type, rr_repr}(
+        new{rlwe_type, mod_repr}(
             n, r, q,
             Q, t, m,
             B, Dr, Dq,
@@ -99,21 +99,21 @@ struct Params{LargeType <: Unsigned, RRType <: AbstractRRElem}
 end
 
 
-type_r(params::Params{LT, RRT}) where {LT, RRT} = RRElem{SmallType, params.r}
+type_r(params::Params{LT, RRT}) where {LT, RRT} = ModUInt{SmallType, params.r}
 type_q(params::Params{LT, RRT}) where {LT, RRT} = RRT{SmallType, params.q}
 type_Q(params::Params{LT, RRT}) where {LT, RRT} = RRT{LT, params.Q}
 
 
 polynomial_r(params::Params, coeffs::AbstractArray) =
-    Polynomial(convert.(type_r(params), coeffs), true)
+    Polynomial(convert.(type_r(params), coeffs), negacyclic_modulus)
 polynomial_q(params::Params, coeffs::AbstractArray) =
-    Polynomial(convert.(type_q(params), coeffs), true)
+    Polynomial(convert.(type_q(params), coeffs), negacyclic_modulus)
 polynomial_q(params::Params, p::Polynomial) =
-    Polynomial(convert.(type_q(params), p.coeffs), true)
+    Polynomial(convert.(type_q(params), value.(p.coeffs)), p.modulus)
 polynomial_Q(params::Params, coeffs) =
-    Polynomial(convert.(type_Q(params), coeffs), true)
+    Polynomial(convert.(type_Q(params), coeffs), negacyclic_modulus)
 polynomial_Q(params::Params, p::Polynomial) =
-    Polynomial(convert.(type_Q(params), p.coeffs), true)
+    Polynomial(convert.(type_Q(params), value.(p.coeffs)), p.modulus)
 
 
 function gadget_matrix(params::Params)
@@ -176,7 +176,7 @@ Creates the FHE bootstrap key based on the given private key.
 struct BootstrapKey
 
     params :: Params
-    key :: Array{Array{Polynomial{T}, 2}, 1} where T
+    key :: Array{Array{Polynomial{T, N}, 2}, 1} where {T, N}
 
     function BootstrapKey(rng::AbstractRNG, sk::PrivateKey) where {LT, RRT}
 
@@ -203,7 +203,7 @@ struct BootstrapKey
 end
 
 
-struct LWE{T <: AbstractRRElem}
+struct LWE{T <: AbstractModUInt}
     a :: Array{T, 1}
     b :: T
 end
@@ -223,7 +223,7 @@ function Base.:-(l1::LWE, l2::LWE)
 end
 
 
-struct RLWE{T <: AbstractRRElem}
+struct RLWE{T <: AbstractModUInt}
     a :: Polynomial{T}
     b :: Polynomial{T}
 end
@@ -234,8 +234,8 @@ end
 
 Extract a sub-array of length `n` from the polynomial coefficients.
 """
-function extract(a::Polynomial, i::Integer, n::Integer)
-    @assert i <= length(a)
+function extract(a::Polynomial{T, N}, i::Integer, n::Integer) where {T, N}
+    @assert i <= N
     if i < n
         [a.coeffs[i:-1:1]; -a.coeffs[end:-1:end-(n-i-1)]]
     else
@@ -340,7 +340,7 @@ function encrypt_optimal(key::PrivateKey, rng::AbstractRNG, message::AbstractArr
     params = key.params
     u, rlwe = _encrypt_private(key, rng, message)
     b_packed = rlwe.b ÷ 2^(params.t - 4)
-    v = unpackbits(convert.(SmallType, b_packed.coeffs), 5)
+    v = unpackbits(convert.(SmallType, value.(b_packed.coeffs)), 5)
     PrivateEncryptedCiphertext(params, BitArray(u), BitArray(v))
 end
 
@@ -399,9 +399,9 @@ function _encrypt_public(key::PublicKey, rng::AbstractRNG, message::AbstractArra
     a1 = key.k0 * u + w1
     a2 = key.k1 * u + w2 + message_poly * params.Dq
 
-    a = reduce_modulus(RRElem, SmallType, params.r, a1)
+    a = reduce_modulus(ModUInt, SmallType, params.r, a1)
     # TODO: assuming here that `r` is a multiple of `2^(params.t - 5)`.
-    b = reduce_modulus(RRElem, SmallType, params.r, a2, true, params.r ÷ 2^(params.t - 5))
+    b = reduce_modulus(ModUInt, SmallType, params.r, a2, true, params.r ÷ 2^(params.t - 5))
     b = b * 2^(params.t - 5)
 
     RLWE(a, b)
@@ -425,10 +425,10 @@ function encrypt_optimal(key::PublicKey, rng::AbstractRNG, message::AbstractArra
     # Only upper 6 bits of rlwe.b are important.
     # So we need to save (t + 1) == log2(r) bits of rlwe.a and 6 bits or rlwe.b
 
-    a_bits = unpackbits(convert.(SmallType, rlwe.a.coeffs), params.t + 1)
+    a_bits = unpackbits(convert.(SmallType, value.(rlwe.a.coeffs)), params.t + 1)
 
     b_packed = rlwe.b ÷ 2^(params.t - 5)
-    b_bits = unpackbits(convert.(SmallType, b_packed.coeffs), 6)
+    b_bits = unpackbits(convert.(SmallType, value.(b_packed.coeffs)), 6)
 
     PublicEncryptedCiphertext(params, a_bits, b_bits)
 end
@@ -487,7 +487,7 @@ function decrypt(key::PrivateKey, ct::Union{Ciphertext, PackedCiphertext})
     # `(x + Dr/2) ÷ Dr` is equivalent to `round(x / Dr)`,
     # but unlike it works well with the modulo values
     # (that is, when a value is closer to the modulo than Dr/2, it should be snapped to 0).
-    b1_coeffs_snapped = convert.(SmallType, b1_coeffs .+ params.Dr ÷ 2)
+    b1_coeffs_snapped = convert.(SmallType, value.(b1_coeffs .+ params.Dr ÷ 2))
 
     convert.(Bool, b1_coeffs_snapped .÷ params.Dr)
 end
@@ -509,15 +509,16 @@ end
 """
     external_product(
         rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2}, B_val::Val, l_val::Val)
+        a::Polynomial{T, N}, b::Polynomial{T, N},
+        A::Array{Polynomial{T, N}, 2}, B_val::Val, l_val::Val)
 
 ``\\odot`` operator in the paper. Returns `[flatten(a); flatten(b)] * A`.
 If `rng` is `nothing`, deterministic flattening is used.
 """
 function external_product(
         rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{T}, b::Polynomial{T}, A::Array{Polynomial{T}, 2},
-        B_val::Val, l_val::Val) where T
+        a::Polynomial{T, N}, b::Polynomial{T, N}, A::Array{Polynomial{T, N}, 2},
+        B_val::Val, l_val::Val) where {T, N}
 
     a_decomp = flatten_poly(rng, a, B_val, l_val)
     b_decomp = flatten_poly(rng, b, B_val, l_val)
@@ -531,17 +532,18 @@ end
 # Creates a polynomial `sum(x^j for j in powers) mod x^len +/- 1`.
 # Powers can be negative, or greater than `len`, in which case they will be properly looped over.
 function _initial_poly(
-        ::Type{T}, powers::AbstractArray{<:Integer, 1}, len::Integer, negacyclic::Bool) where T
+        ::Type{T}, powers::AbstractArray{<:Integer, 1}, len::Integer,
+        pmodulus::DarkIntegers.AbstractCyclicModulus) where T
     coeffs = zeros(T, len)
     for i in powers
-        coeffs[mod(i, len) + 1] += negacyclic ? (mod(fld(i, len), 2) == 0 ? 1 : -1) : 1
+        coeffs[mod(i, len) + 1] += pmodulus == negacyclic_modulus ? (mod(fld(i, len), 2) == 0 ? 1 : -1) : 1
     end
-    Polynomial(coeffs, negacyclic)
+    Polynomial(coeffs, pmodulus)
 end
 
 
 function initial_poly(params::Params)
-    _initial_poly(type_Q(params), -Int(params.Dr-1):Int(params.Dr-1), params.m, true)
+    _initial_poly(type_Q(params), -Int(params.Dr-1):Int(params.Dr-1), params.m, negacyclic_modulus)
 end
 
 
@@ -549,7 +551,7 @@ end
 Multiplies the given polynomial by `(x^j - 1)`.
 """
 function mul_by_xj_minus_one(p::Polynomial, j::Integer)
-    shift_polynomial(p, j) - p
+    mul_by_monomial(p, j) - p
 end
 
 
@@ -566,18 +568,15 @@ function _bootstrap_internal(
 
     a = polynomial_Q(bkey.params, zeros(Int, params.m))
 
-    # `u.b` can be any value in the unsigned integer range,
-    # and we need a negative of it, so we have to widen the type before conversion.
-    wtp = widen(encompassing_type(SmallType))
-    shift = signed(convert(wtp, u.b))
-    b = shift_polynomial(t, -shift) * ptp(params.DQ_tilde)
+    shift = convert(BigInt, value(u.b))
+    b = mul_by_monomial(t, -shift) * ptp(params.DQ_tilde)
 
     B_val = Val(ptp(params.B))
     l_val = Val(2)
     G = gadget_matrix(params)
 
     for k = 1:params.n
-        A = mul_by_xj_minus_one.(bkey.key[k], convert(SmallType, u.a[k])) .+ G
+        A = mul_by_xj_minus_one.(bkey.key[k], convert(SmallType, value(u.a[k]))) .+ G
         a, b = external_product(rng, a, b, A, B_val, l_val)
     end
 
@@ -613,9 +612,9 @@ function bootstrap(
 
     a_and, a_or, a_xor = _bootstrap_internal(bkey, rng, enc_bit1, enc_bit2)
 
-    c_and = reduce_modulus(RRElem, SmallType, params.r, a_and)
-    c_or = reduce_modulus(RRElem, SmallType, params.r, a_or)
-    c_xor = reduce_modulus(RRElem, SmallType, params.r, a_xor)
+    c_and = reduce_modulus(ModUInt, SmallType, params.r, a_and)
+    c_or = reduce_modulus(ModUInt, SmallType, params.r, a_or)
+    c_xor = reduce_modulus(ModUInt, SmallType, params.r, a_xor)
 
     EncryptedBit(c_and), EncryptedBit(c_or), EncryptedBit(c_xor)
 end
@@ -624,15 +623,15 @@ end
 """
     shortened_external_product(
         rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{T}, A::Array{Polynomial{T}, 2}, B_val::Val, l_val::Val)
+        a::Polynomial{T, N}, A::Array{Polynomial{T, N}, 2}, B_val::Val, l_val::Val)
 
 ``\\odot`` operator in the paper. Returns `flatten(a) * A[l+1:2l,:]`.
 If `rng` is `nothing`, deterministic flattening is used.
 """
 function shortened_external_product(
         rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{T}, A::Array{Polynomial{T}, 2},
-        B_val::Val, l_val::Val{l}) where {T, l}
+        a::Polynomial{T, N}, A::Array{Polynomial{T, N}, 2},
+        B_val::Val, l_val::Val{l}) where {T, N, l}
 
     u = flatten_poly(rng, a, B_val, l_val)
     a_res = sum(u .* A[l+1:2*l,1])
@@ -641,10 +640,10 @@ function shortened_external_product(
 end
 
 
-function reduce_modulus(rr_repr, rr_type, new_modulus, lwe::LWE)
+function reduce_modulus(mod_repr, base_type, new_modulus, lwe::LWE)
     LWE(
-        reduce_modulus.(rr_repr, rr_type, new_modulus, lwe.a),
-        reduce_modulus(rr_repr, rr_type, new_modulus, lwe.b))
+        reduce_modulus.(mod_repr, base_type, new_modulus, lwe.a),
+        reduce_modulus(mod_repr, base_type, new_modulus, lwe.b))
 end
 
 
@@ -673,9 +672,9 @@ function pack_encrypted_bits(
     new_lwes = [_bootstrap_internal(bkey, rng, enc_trivial, enc_bit)[1] for enc_bit in enc_bits]
 
     as = [
-        change_length(params.m, Polynomial([new_lwes[j].a[i] for j in 1:params.n], true))
+        change_length(params.m, Polynomial([new_lwes[j].a[i] for j in 1:params.n], negacyclic_modulus))
         for i in 1:params.n]
-    b = change_length(params.m, Polynomial([new_lwe.b for new_lwe in new_lwes], true))
+    b = change_length(params.m, Polynomial([new_lwe.b for new_lwe in new_lwes], negacyclic_modulus))
 
     B_val = Val(ptp(params.B))
 
@@ -689,8 +688,8 @@ function pack_encrypted_bits(
     w1_tilde = -w_tilde
     v1_tilde = b - v_tilde
 
-    w = reduce_modulus(RRElem, SmallType, params.r, w1_tilde)
-    v = reduce_modulus(RRElem, SmallType, params.r, v1_tilde)
+    w = reduce_modulus(ModUInt, SmallType, params.r, w1_tilde)
+    v = reduce_modulus(ModUInt, SmallType, params.r, v1_tilde)
 
     Ciphertext(params, RLWE(w, v))
 end

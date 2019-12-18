@@ -76,7 +76,7 @@ end
 """
     function reduce_modulus(
         new_repr, new_base_type, new_modulus::Unsigned,
-        x::Union{<:AbstractRRElem, Polynomial{<:AbstractRRElem}},
+        x::Union{<:AbstractModUInt, Polynomial{<:AbstractModUInt}},
         floor_result::Bool=false,
         new_max::Union{Nothing, Unsigned}=nothing)
 
@@ -89,11 +89,11 @@ If `new_max` is `nothing`, it is taken equal to `new_modulus`.
         new_repr, new_base_type, new_modulus::Unsigned,
         x::Union{T, Polynomial{T}},
         floor_result::Bool=false,
-        new_max::Union{Nothing, Unsigned}=nothing) where T <: AbstractRRElem
+        new_max::Union{Nothing, Unsigned}=nothing) where T <: AbstractModUInt
     # Change representation to the regular residue ring element first
     # to avoid conversions during division.
-    x_rr = change_representation(RRElem, x)
-    x_rs = rescale(new_max === nothing ? new_modulus : new_max, x_rr, !floor_result)
+    x_mod = change_representation(ModUInt, x)
+    x_rs = rescale(new_max === nothing ? new_modulus : new_max, x_mod, !floor_result)
     x_cm = change_modulus(new_modulus, x_rs)
     x_ct = change_base_type(new_base_type, x_cm)
     change_representation(new_repr, x_ct)
@@ -120,13 +120,13 @@ Assumes `B^l <= q` where `q` is the modulus of `a`.
 
 
 """
-    flatten(rng::Nothing, a::AbstractRRElem, ::Val{B}, ::Val{l})
+    flatten(rng::Nothing, a::AbstractModUInt, ::Val{B}, ::Val{l})
 
 The result is deterministic, and each element of the returned tuple `-B/2 < b[i] <= B/2`
 (where the comparisons are modulo `modulus(a)`).
 """
 @inline @generated function flatten(
-        rng::Nothing, a::T, ::Val{B}, ::Val{l}) where {B, l, T <: AbstractRRElem}
+        rng::Nothing, a::T, ::Val{B}, ::Val{l}) where {B, l, T <: AbstractModUInt}
 
     @assert typeof(B) == T
     @assert l >= 1
@@ -163,27 +163,27 @@ end
 
 
 """
-    flatten(rng::AbstractRNG, a::AbstractRRElem, ::Val{B}, ::Val{l})
+    flatten(rng::AbstractRNG, a::AbstractModUInt, ::Val{B}, ::Val{l})
 
 The result is randomized, and each element of the returned tuple `-2B < b[i] <= 2B`
 (where the comparisons are modulo `modulus(a)`).
 """
 @inline @generated function flatten(
-        rng::AbstractRNG, a::T, B_val::Val{B}, l_val::Val{l}) where {B, l, T <: AbstractRRElem}
+        rng::AbstractRNG, a::T, B_val::Val{B}, l_val::Val{l}) where {B, l, T <: AbstractModUInt}
 
     @assert typeof(B) == T
     @assert l >= 1
 
     etp = encompassing_type(T)
-    B_u = convert(etp, B)
+    B_u = convert(etp, value(B))
 
     # Ensure that `-xmax` and `xmax` fit into the signed version of `etp`
     @assert B_u <= typemax(etp) ÷ 4
 
-    if isodd(B)
-        xmax = (B-1) ÷ 2 * 3
+    if isodd(B_u)
+        xmax = (B_u - 1) ÷ 2 * 3
     else
-        xmax = B ÷ 2 * 3
+        xmax = B_u ÷ 2 * 3
     end
 
     xmax_i = signed(convert(etp, xmax))
@@ -217,7 +217,7 @@ end
 """
     function flatten_poly(
         rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{<:AbstractRRElem}, B_val::Val{B}, l_val::Val{l})
+        a::Polynomial{<:AbstractModUInt}, B_val::Val{B}, l_val::Val{l})
 
 Applies [`flatten`](@ref) to each of the coefficients of the polynomial,
 and return a tuple of `l` polynomials, where the `i`-th polynomial is created out
@@ -225,9 +225,9 @@ of `i`-th elements of the returned tuples.
 """
 @Base.propagate_inbounds function flatten_poly(
         rng::Union{AbstractRNG, Nothing},
-        a::Polynomial{T}, B_val::Val{B}, l_val::Val{l}) where {B, l, T <: AbstractRRElem}
-    results = [Polynomial(zeros(T, length(a)), a.negacyclic) for i in 1:l]
-    for j in 1:length(a)
+        a::Polynomial{T, N}, B_val::Val{B}, l_val::Val{l}) where {B, l, T <: AbstractModUInt, N}
+    results = [Polynomial(zeros(T, N), a.modulus) for i in 1:l]
+    for j in 1:N
         decomp = flatten(rng, a.coeffs[j], B_val, l_val)
         for i in 1:l
             results[i].coeffs[j] = decomp[i]

@@ -9,9 +9,9 @@ using SGFHE
 using SGFHE: EncryptedBit
 
 
-function to_signed(x::AbstractRRElem)
-    m = convert(Int, DarkIntegers.rr_modulus(x))
-    v = convert(Int, x)
+function to_signed(x::AbstractModUInt)
+    m = convert(Int, modulus(x))
+    v = convert(Int, value(x))
     v > m ÷ 2 ? v - m : v
 end
 

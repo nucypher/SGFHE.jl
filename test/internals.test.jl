@@ -27,7 +27,7 @@ end
 
 @testcase(
     "flatten()",
-    for rrtp in [RRElem, RRElemMontgomery],
+    for rrtp in [ModUInt, MgModUInt],
             use_rng in ([false, true] => ["deterministic", "random"]),
             l in ([3, 4] => ["l=3", "l=4"]),
             B in ([4, 5] => ["B=4", "B=5"])
@@ -35,8 +35,8 @@ end
         q = B^l - 1
         l_val = Val(l)
 
-        if rrtp == RRElemMontgomery && !isodd(q)
-            # RRElemMontgomery requires an odd modulus
+        if rrtp == MgModUInt && !isodd(q)
+            # MgModUInt requires an odd modulus
             q -= 1
         end
 
@@ -46,22 +46,22 @@ end
         lim_lo, lim_hi = decomposition_limits(B, q, use_rng)
         rng = use_rng ? MersenneTwister() : nothing
 
-        B_rr = convert(tp, B)
-        base = Val(B_rr)
+        B_mod = convert(tp, B)
+        base = Val(B_mod)
 
         for a in 0:q-1
 
-            a_rr = convert(tp, a)
+            a_mod = convert(tp, a)
 
-            decomp_rr = flatten(rng, a_rr, base, l_val)
-            restore_rr = sum(decomp_rr .* B_rr.^(0:l-1))
+            decomp_rr = flatten(rng, a_mod, base, l_val)
+            restore_rr = sum(decomp_rr .* B_mod.^(0:l-1))
 
-            if !(restore_rr == a_rr)
-                @test_fail "Restored value is wrong for $a_rr: $restore_rr"
+            if !(restore_rr == a_mod)
+                @test_fail "Restored value is wrong for $a_mod: $restore_rr"
                 break
             end
 
-            decomp = convert.(BigInt, decomp_rr)
+            decomp = convert.(BigInt, value.(decomp_rr))
 
             if !all(d <= lim_hi || d >= lim_lo for d in decomp)
                 @test_fail "Values outside the limit for $a: $decomp"
@@ -78,23 +78,23 @@ end
     l = 2
     q = B^l - one(tp) # modulus
 
-    rr_tp = RRElemMontgomery{tp, q}
+    mod_tp = MgModUInt{tp, q}
 
-    B_rr = rr_tp(B)
+    B_mod = mod_tp(B)
 
-    a = Polynomial(rr_tp.(rand(tp, 64)), true)
+    a = Polynomial(mod_tp.(rand(tp, 64)), negacyclic_modulus)
 
     lim_lo, lim_hi = decomposition_limits(B, q, use_rng)
     rng = use_rng ? MersenneTwister() : nothing
 
-    u = flatten_poly(rng, a, Val(B_rr), Val(l))
+    u = flatten_poly(rng, a, Val(B_mod), Val(l))
 
     for x in u
-        coeffs = convert.(tp, x.coeffs)
+        coeffs = convert.(tp, value.(x.coeffs))
         @test all(c <= lim_hi || c >= lim_lo for c in coeffs)
     end
 
-    a_restored = sum(u .* B_rr.^(0:l-1))
+    a_restored = sum(u .* B_mod.^(0:l-1))
 
     @test a == a_restored
 end
@@ -107,18 +107,18 @@ end
     l = 2
     q = B^l - one(tp) # modulus
 
-    rr_tp = RRElemMontgomery{tp, q}
+    mod_tp = MgModUInt{tp, q}
 
-    B_rr = rr_tp(B)
+    B_mod = mod_tp(B)
 
-    a = Polynomial(rr_tp.(rand(tp, 64)), true)
-    b = Polynomial(rr_tp.(rand(tp, 64)), true)
-    pz = Polynomial(rr_tp.(zeros(tp, 64)), true)
+    a = Polynomial(mod_tp.(rand(tp, 64)), negacyclic_modulus)
+    b = Polynomial(mod_tp.(rand(tp, 64)), negacyclic_modulus)
+    pz = Polynomial(mod_tp.(zeros(tp, 64)), negacyclic_modulus)
 
     rng = use_rng ? MersenneTwister() : nothing
 
-    G = ([pz pz; pz pz; pz pz; pz pz] .+ rr_tp.([1 0; B 0; 0 1; 0 B]))
-    a_restored, b_restored = external_product(rng, a, b, G, Val(B_rr), Val(l))
+    G = ([pz pz; pz pz; pz pz; pz pz] .+ mod_tp.([1 0; B 0; 0 1; 0 B]))
+    a_restored, b_restored = external_product(rng, a, b, G, Val(B_mod), Val(l))
 
     @test a == a_restored
     @test b == b_restored

@@ -1,0 +1,19 @@
+name = "SGFHE"
+uuid = "3abb9fa0-100c-4d55-96be-73331faddafb"
+authors = ["Bogdan Opanchuk <bogdan@opanchuk.net>"]
+version = "0.1.0"
+
+[deps]
+DarkIntegers = "95d18f7b-8dde-4426-a3cb-b3b9e7df9890"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Primes = "27ebfcd6-29c5-5fa9-bf4b-fb8fc14df3ae"
+
+[extras]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Jute = "82bedeac-9837-5b62-883a-b5b3b7c811c5"
+
+[targets]
+test = ["Random", "BenchmarkTools", "Jute"]
+
+[compat]
+julia = "≥ 1.0.0"

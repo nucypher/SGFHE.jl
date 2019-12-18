@@ -1,8 +1,3 @@
-using Primes
-using Random
-using DarkIntegers
-
-
 """
 Find a residue ring modulus `q` that:
 - `qmin <= q <= qmax`

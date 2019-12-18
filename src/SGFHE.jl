@@ -1,5 +1,9 @@
 module SGFHE
 
+using Primes
+using Random
+using DarkIntegers
+
 include("utils.jl")
 
 include("fhe.jl")

@@ -110,7 +110,7 @@ struct BootstrapKey
 
         params = sk.params
 
-        ext_key = change_length(params.m, polynomial_Q(params, sk.key))
+        ext_key = resize(polynomial_Q(params, sk.key), params.m)
 
         tp = encompassing_type(type_Q(params))
         range_Q = zero(tp):convert(tp, params.Q)-one(tp)
@@ -214,7 +214,7 @@ function decrypt(key::PrivateKey, a::Polynomial, b::Polynomial)
 
     #=
     if typeof(ct) == Ciphertext
-        key_poly = change_length(params.m, key.key)
+        key_poly = resize(key.key, params.m)
     else
         key_poly = key.key
     end

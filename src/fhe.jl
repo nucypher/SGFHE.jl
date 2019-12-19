@@ -182,7 +182,7 @@ struct BootstrapKey
 
         params = sk.params
 
-        ext_key = change_length(params.m, polynomial_Q(params, sk.key))
+        ext_key = resize(polynomial_Q(params, sk.key), params.m)
 
         tp = encompassing_type(type_Q(params))
         range_Q = zero(tp):convert(tp, params.Q)-one(tp)
@@ -471,7 +471,7 @@ function decrypt(key::PrivateKey, ct::Union{Ciphertext, PackedCiphertext})
     params = key.params
 
     if typeof(ct) == Ciphertext
-        key_poly = change_length(params.m, key.key)
+        key_poly = resize(key.key, params.m)
     else
         key_poly = key.key
     end
@@ -672,9 +672,9 @@ function pack_encrypted_bits(
     new_lwes = [_bootstrap_internal(bkey, rng, enc_trivial, enc_bit)[1] for enc_bit in enc_bits]
 
     as = [
-        change_length(params.m, Polynomial([new_lwes[j].a[i] for j in 1:params.n], negacyclic_modulus))
+        resize(Polynomial([new_lwes[j].a[i] for j in 1:params.n], negacyclic_modulus), params.m)
         for i in 1:params.n]
-    b = change_length(params.m, Polynomial([new_lwe.b for new_lwe in new_lwes], negacyclic_modulus))
+    b = resize(Polynomial([new_lwe.b for new_lwe in new_lwes], negacyclic_modulus), params.m)
 
     B_val = Val(ptp(params.B))
 

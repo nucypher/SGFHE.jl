@@ -69,6 +69,30 @@ end
 
 
 """
+    rescale(new_max::Unsigned, x::T, old_max::T, round_result::Bool) where T <: Unsigned
+
+Rescale `x` proportionally to the range `[0, new_max)` (where `new_max <= M`).
+Equivalent to `floor(x * new_max / M)` or `round(...)`, depending on the value of `round_result`.
+If `round_result` is `true`, and the value if equal to `new_max` after rounding, it is set to 0.
+"""
+@inline function rescale(
+        new_max::Unsigned, x::T, old_max::T, round_result::Bool) where T <: Unsigned
+    nm = convert(T, new_max)
+    hi, lo = mulhilo(x, nm)
+    q, r = divremhilo(hi, lo, old_max)
+    if round_result
+        if r >= old_max ÷ 2 + (isodd(old_max) ? one(T) : zero(T))
+            q += one(T)
+            if q == nm
+                q = zero(T)
+            end
+        end
+    end
+    q
+end
+
+
+"""
     function reduce_modulus(
         new_repr, new_base_type, new_modulus::Unsigned,
         x::Union{<:AbstractModUInt, Polynomial{<:AbstractModUInt}},
@@ -82,16 +106,24 @@ If `new_max` is `nothing`, it is taken equal to `new_modulus`.
 """
 @inline function reduce_modulus(
         new_repr, new_base_type, new_modulus::Unsigned,
-        x::Union{T, Polynomial{T}},
+        x::T,
         floor_result::Bool=false,
         new_max::Union{Nothing, Unsigned}=nothing) where T <: AbstractModUInt
     # Change representation to the regular residue ring element first
     # to avoid conversions during division.
-    x_mod = change_representation(ModUInt, x)
-    x_rs = rescale(new_max === nothing ? new_modulus : new_max, x_mod, !floor_result)
-    x_cm = change_modulus(new_modulus, x_rs)
-    x_ct = change_base_type(new_base_type, x_cm)
-    change_representation(new_repr, x_ct)
+    x_mod = value(x)
+    x_rs = rescale(new_max === nothing ? new_modulus : new_max, x_mod, modulus(x), !floor_result)
+    new_repr(convert.(new_base_type, x_rs), new_modulus, DarkIntegers._verbatim)
+end
+
+
+function reduce_modulus(
+        new_repr, new_base_type, new_modulus::Unsigned,
+        x::Polynomial,
+        floor_result::Bool=false,
+        new_max::Union{Nothing, Unsigned}=nothing)
+    broadcast_into_polynomial(
+        reduce_modulus, new_repr, new_base_type, new_modulus, x, floor_result, new_max)
 end
 
 

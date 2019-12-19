@@ -200,7 +200,8 @@ function encrypt(key::PublicKey, rng::AbstractRNG, message::AbstractArray{Int, 1
     b1 = key.k1 * u + w2 + message_poly * params.Dq
 
     a = reduce_modulus(ModUInt, SmallType, unsigned(params.r), a1)
-    # TODO: assuming here that `r` is a multiple of `2^(params.t - 5)`.
+
+    @assert mod(params.r, 2^(params.t - 5)) == 0
     b = reduce_modulus(ModUInt, SmallType, unsigned(params.r), b1, true,
         unsigned(params.r) ÷ 2^(params.t - params.k - 5))
     b = b * 2^(params.t - params.k - 5)

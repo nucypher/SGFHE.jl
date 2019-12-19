@@ -61,7 +61,7 @@ Expands a sequence of `n` bits into a pseudo-random array of `n * factor` bits d
 representing each `factor` bits as an integer.
 """
 function prng_expand(::Type{T}, seq::BitArray{1}, factor::Int) where T
-    # TODO: should be done with SHAKE-128 or 256.
+    # TODO: (see issue #1) should be done with SHAKE-128 or 256.
     rng = MersenneTwister(hash(seq))
     bits = BitArray(rand(rng, Bool, factor, length(seq)))
     packbits(T, bits)

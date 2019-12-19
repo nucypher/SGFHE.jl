@@ -400,7 +400,8 @@ function _encrypt_public(key::PublicKey, rng::AbstractRNG, message::AbstractArra
     a2 = key.k1 * u + w2 + message_poly * params.Dq
 
     a = reduce_modulus(ModUInt, SmallType, params.r, a1)
-    # TODO: assuming here that `r` is a multiple of `2^(params.t - 5)`.
+
+    @assert mod(params.r, 2^(params.t - 5)) == 0
     b = reduce_modulus(ModUInt, SmallType, params.r, a2, true, params.r ÷ 2^(params.t - 5))
     b = b * 2^(params.t - 5)
 

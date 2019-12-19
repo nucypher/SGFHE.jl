@@ -1,6 +1,39 @@
 #=
 This example checks LWE errors after different operations and compares them
 to the ranges specified in the original paper.
+
+There are several things.
+
+After the private key encryption the error range specified in the paper is `[-Dr/4, Dr/4]`,
+the actual range is `[-Dr/4, Dr/8]`. The reason being that one of the components contributing
+to the error comes from flooring of the coefficients of `b(x)` to a power of 2
+(namely, `2^(t-4) == r / 32 == Dr / 8`). So the error here is really `[0, Dr/8]`,
+but Gao pessimistically considers it to be `[-Dr/8, Dr/8]`.
+
+With the public key encryption it's a bit more complicated. Besides another pessimistic
+estimate of a rounding error, there is also an estimate that is technically correct,
+but the worst case is extremely rare. Namely, if we have a polynomial `u(x)`
+with coefficients in range `[-a, a]` and a polynomial `s(x)` with coefficients
+in range `[-1, 1]`, then the coefficients of the product `u(x) * s(x)` lie in range
+`[-a * n, a * n]` where `n` is the length of the polynomials.
+
+In reality though `s(x)` is a key, and its coefficients are randomly sampled from `{0, 1}`.
+Therefore for large `n` the expectation of the maximum of `u(x) * s(x)` is really `a * sqrt(n)`,
+with normal distribution around it (these are rough estimates,
+but they seem to give the correct predictions). As a result, instead of the expected error
+in range `[-Dr/4, Dr/4]`, we get an error in range
+`[-2Dr / 41 / sqrt(n) - Dr / 82 - sqrt(n) / 2 - n/4, n/4]`
+(for `n=512` it means `[-168,40]` instead of `[-512,512]`).
+
+After bootstrap the error drops dramatically and is of the order of `1` for `n=512`.
+The reason is most likely the pessimistic estimate described above as well.
+
+Now there is a question of how important it is. Even with a zero error you cannot just decrypt
+a single LWE sample. But my understanding is that if you accumulate `n` samples, you can solve
+the resulting linear system and obtain the private key. Most likely there is some dependence
+between the size of the error and the amount of samples you need to break the encryption
+(exponential?). I've been looking through papers on LWE, but it is still not clear to me
+what this dependence is.
 =#
 
 using Random

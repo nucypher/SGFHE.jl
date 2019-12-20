@@ -13,7 +13,7 @@ BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Jute = "82bedeac-9837-5b62-883a-b5b3b7c811c5"
 
 [targets]
-test = ["Random", "BenchmarkTools", "Jute"]
+test = ["BenchmarkTools", "Jute"]
 
 [compat]
 julia = "≥ 1.0.0"

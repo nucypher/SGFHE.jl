@@ -17,3 +17,4 @@ test = ["Random", "BenchmarkTools", "Jute"]
 
 [compat]
 julia = "≥ 1.0.0"
+DarkIntegers = "~0.1.0"

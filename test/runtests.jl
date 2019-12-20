@@ -4,4 +4,4 @@ include("api.test.jl")
 include("internals.test.jl")
 include("performance.test.jl")
 
-exit(runtests())
+exit(runtests(options=Dict(:exclude_tags => [:performance])))

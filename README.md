@@ -1,5 +1,7 @@
 # Shuhong Gao's FHE scheme
 
+Master branch: [![CircleCI](https://circleci.com/gh/nucypher/SGFHE.jl/tree/master.svg?style=svg)](https://circleci.com/gh/nucypher/SGFHE.jl/tree/master) [![codecov](https://codecov.io/gh/nucypher/SGFHE.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/nucypher/SGFHE.jl)
+
 This package contains a reference implementation of the FHE scheme from [S. Gao, "Efficient fully homomorphic encryption scheme"](https://eprint.iacr.org/2018/637).
 The aim is to keep the implementation simple as long as it does not affect the performance too much.
 
